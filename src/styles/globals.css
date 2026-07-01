@@ -15,6 +15,8 @@
   --color-accent-hover: #ff8f3c;
   --color-accent-active: #e8650a;
   --color-accent-fg: #1a0e03;
+  /* Accent so do orb (terracota Claude). --color-accent (Settings/Logo) fica inalterado. */
+  --color-orb-accent: #d97757;
 
   /* Superficies */
   --color-bg: #0b0a09;
@@ -70,30 +72,23 @@
   }
 }
 
-/* O orb: bolinha laranja FLAT (2D), sem gradiente 3D nem glow pesado. */
 .ember-orb {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
   border-radius: 9999px;
-  background: var(--color-accent);
-  box-shadow: 0 1px 10px rgba(255, 122, 24, 0.45);
+  background: var(--color-orb-accent);
+  box-shadow: 0 1px 8px rgba(217, 119, 87, 0.45);
   will-change: transform;
 }
 
-/* Anel spinner flat a rodar (estado a refinar), por cima do orb. So roda (transform). */
-.ember-ring {
+/* Glow pulsante (estado "a pensar"), por baixo do orb. Sem rotacao: so respiracao de luz. */
+.ember-glow {
   position: absolute;
   inset: -7px;
   border-radius: 9999px;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    var(--color-accent) 70deg,
-    transparent 200deg
-  );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-  will-change: transform;
+  background: radial-gradient(circle, rgba(217, 119, 87, 0.55) 0%, rgba(217, 119, 87, 0) 70%);
+  filter: blur(2px);
+  will-change: opacity, transform;
 }
 
 /* Bolha de preview (vidro). O backdrop-filter fica ESTATICO; so conteudo/opacidade animam. */

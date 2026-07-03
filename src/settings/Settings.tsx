@@ -33,16 +33,19 @@ const CUSTOM = "__custom__";
 
 function Section({
   title,
+  titleId,
   hint,
   children,
 }: {
   title: string;
+  /** Id opcional no titulo, para controlos sem Label proprio se associarem via aria-labelledby. */
+  titleId?: string;
   hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-[color:var(--border-subtle)] bg-surface-1 p-5">
-      <h3 className="text-sm font-semibold text-fg">{title}</h3>
+      <h3 id={titleId} className="text-sm font-semibold text-fg">{title}</h3>
       {hint && <p className="mt-1 text-xs text-fg-muted">{hint}</p>}
       <div className="mt-4 flex flex-col gap-4">{children}</div>
     </div>
@@ -62,6 +65,14 @@ function ModelPicker({
 }) {
   const [picked, setPicked] = useState(presets.includes(model) ? model : CUSTOM);
   const [custom, setCustom] = useState(model);
+
+  // O `model` real so chega depois do getSettings assincrono; o estado local foi inicializado
+  // com o default. Ressincroniza quando o modelo guardado aterra, senao a UI mostrava sempre
+  // o modelo por defeito em vez do escolhido pelo utilizador.
+  useEffect(() => {
+    setPicked(presets.includes(model) ? model : CUSTOM);
+    setCustom(model);
+  }, [model, presets]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -87,6 +98,7 @@ function ModelPicker({
       </Select>
       {picked === CUSTOM && (
         <Input
+          aria-label={`Custom ${kind} model id`}
           value={custom}
           onChange={(e) => setCustom(e.target.value)}
           onBlur={() => custom.trim() && onCommit(custom.trim())}
@@ -116,19 +128,43 @@ function ProviderConfig({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(hasKey);
 
+  // `hasKey` chega do getSettings assincrono, depois do mount; sem ressincronizar, o
+  // indicador de "chave guardada" ficava sempre a false mesmo com uma chave no cofre.
+  useEffect(() => setSaved(hasKey), [hasKey]);
+
   const saveKey = async () => {
     if (!key.trim()) return;
     setBusy(true);
     try {
       await ipc.setApiKey(kind, key.trim());
-      const ok = await ipc.validateKey(kind);
+      const status = await ipc.validateKey(kind);
       setSaved(true);
       setKey("");
-      toast[ok ? "success" : "error"](
-        ok ? `${title} key is valid and saved.` : `${title} key saved, but validation failed.`,
-      );
+      // "invalid" e "sem rede agora" sao coisas diferentes: uma chave boa nao deve parecer
+      // recusada so porque a maquina estava offline no momento da validacao.
+      if (status === "valid") {
+        toast.success(`${title} key is valid and saved.`);
+      } else if (status === "invalid") {
+        toast.error(`${title} key saved, but looks invalid. Double-check it.`);
+      } else {
+        toast.error(`${title} key saved. Couldn't verify it right now (no network).`);
+      }
     } catch {
       toast.error("Couldn't save the key (app not running?).");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeKey = async () => {
+    setBusy(true);
+    try {
+      await ipc.clearApiKey(kind);
+      setSaved(false);
+      setKey("");
+      toast.success(`${title} key removed.`);
+    } catch {
+      toast.error("Couldn't remove the key.");
     } finally {
       setBusy(false);
     }
@@ -139,7 +175,7 @@ function ProviderConfig({
       await ipc.setModel(kind, m);
       toast.success(`${title} model updated.`);
     } catch {
-      /* outside Tauri */
+      toast.error("Couldn't update the model.");
     }
   };
 
@@ -158,6 +194,11 @@ function ProviderConfig({
           <Button variant="primary" onClick={saveKey} disabled={busy || !key.trim()}>
             Save
           </Button>
+          {saved && (
+            <Button variant="ghost" onClick={removeKey} disabled={busy}>
+              Remove
+            </Button>
+          )}
         </div>
       </div>
       <ModelPicker kind={kind} presets={presets} model={model} onCommit={commitModel} />
@@ -166,12 +207,14 @@ function ProviderConfig({
 }
 
 function NumberField({
+  id,
   label,
   value,
   onChange,
   min,
   max,
 }: {
+  id: string;
   label: string;
   value: number;
   onChange: (n: number) => void;
@@ -180,8 +223,9 @@ function NumberField({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Input
+        id={id}
         type="number"
         min={min}
         max={max}
@@ -241,24 +285,38 @@ export function Settings() {
   };
 
   const setMode = (mode: RefineMode) => {
+    const prev = s.mode;
     setS({ ...s, mode });
     ipc
       .setMode(mode)
       .then(() => toast.success(`Refine mode: ${MODE_COPY[mode].title}.`))
-      .catch(() => toast.error("Couldn't update the mode."));
+      .catch(() => {
+        setS((cur) => ({ ...cur, mode: prev })); // reverte o otimismo se o backend falhou
+        toast.error("Couldn't update the mode.");
+      });
   };
 
   const setThinking = (enabled: boolean, level: ThinkingLevel) => {
+    const prev = { enabled: s.thinkingEnabled, level: s.thinkingLevel };
     setS({ ...s, thinkingEnabled: enabled, thinkingLevel: level });
-    ipc
-      .setThinking(enabled, level)
-      .catch(() => toast.error("Couldn't update extended thinking."));
+    ipc.setThinking(enabled, level).catch(() => {
+      setS((cur) => ({ ...cur, thinkingEnabled: prev.enabled, thinkingLevel: prev.level }));
+      toast.error("Couldn't update extended thinking.");
+    });
   };
 
   const saveTiming = () => {
     ipc
       .setCaptureTiming(polls, stepMs, settleMs)
-      .then(() => toast.success("Capture timing saved."))
+      .then((res) => {
+        // O backend clampa os valores; reflete o que ficou mesmo gravado (ex: 500 -> 100),
+        // senao a UI mostrava um numero fora da gama diferente do que esta em disco.
+        setS(res);
+        setPolls(res.capturePolls);
+        setStepMs(res.captureStepMs);
+        setSettleMs(res.pasteSettleMs);
+        toast.success("Capture timing saved.");
+      })
       .catch(() => toast.error("Couldn't save the timing."));
   };
 
@@ -331,9 +389,9 @@ export function Settings() {
   
             <TabsContent value="refining">
               <div className="flex flex-col gap-4">
-                <Section title="Refine mode" hint={MODE_COPY[s.mode].hint}>
+                <Section title="Refine mode" titleId="refine-mode-heading" hint={MODE_COPY[s.mode].hint}>
                   <Select value={s.mode} onValueChange={(v) => setMode(v as RefineMode)}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-labelledby="refine-mode-heading">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -351,20 +409,21 @@ export function Settings() {
                   hint="Gemini reasons longer before answering. Higher quality, a bit slower."
                 >
                   <div className="flex items-center justify-between">
-                    <Label>Enable extended thinking</Label>
+                    <Label htmlFor="thinking-enabled">Enable extended thinking</Label>
                     <Switch
+                      id="thinking-enabled"
                       checked={s.thinkingEnabled}
                       onCheckedChange={(v) => setThinking(v, s.thinkingLevel)}
                     />
                   </div>
                   {s.thinkingEnabled && (
                     <div className="flex flex-col gap-2">
-                      <Label>Thinking level</Label>
+                      <Label htmlFor="thinking-level">Thinking level</Label>
                       <Select
                         value={s.thinkingLevel}
                         onValueChange={(v) => setThinking(true, v as ThinkingLevel)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="thinking-level">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -384,8 +443,9 @@ export function Settings() {
                   hint="Use Ctrl+Shift+C/V in terminal apps, since Ctrl+C sends an interrupt there."
                 >
                   <div className="flex items-center justify-between">
-                    <Label>Detect terminals automatically</Label>
+                    <Label htmlFor="terminal-handling">Detect terminals automatically</Label>
                     <Switch
+                      id="terminal-handling"
                       checked={s.terminalHandling}
                       onCheckedChange={(v) => {
                         setS({ ...s, terminalHandling: v });
@@ -420,6 +480,7 @@ export function Settings() {
                       >
                         <div className="grid grid-cols-3 gap-3 pt-1">
                           <NumberField
+                            id="capture-polls"
                             label="Capture polls"
                             value={polls}
                             onChange={setPolls}
@@ -427,6 +488,7 @@ export function Settings() {
                             max={200}
                           />
                           <NumberField
+                            id="capture-step-ms"
                             label="Poll interval (ms)"
                             value={stepMs}
                             onChange={setStepMs}
@@ -434,6 +496,7 @@ export function Settings() {
                             max={100}
                           />
                           <NumberField
+                            id="paste-settle-ms"
                             label="Paste settle (ms)"
                             value={settleMs}
                             onChange={setSettleMs}
@@ -452,9 +515,13 @@ export function Settings() {
             </TabsContent>
   
             <TabsContent value="hotkey">
-              <Section title="Global shortcut" hint="The combo that summons Ember in any app.">
+              <Section title="Global shortcut" titleId="hotkey-heading" hint="The combo that summons Ember in any app.">
                 <div className="flex gap-2">
-                  <Input value={hotkey} onChange={(e) => setHotkey(e.target.value)} />
+                  <Input
+                    aria-labelledby="hotkey-heading"
+                    value={hotkey}
+                    onChange={(e) => setHotkey(e.target.value)}
+                  />
                   <Button
                     onClick={() =>
                       ipc
@@ -470,8 +537,9 @@ export function Settings() {
               <div className="mt-4">
                 <Section title="Startup" hint="Launch Ember automatically with Windows.">
                   <div className="flex items-center justify-between">
-                    <Label>Start with Windows</Label>
+                    <Label htmlFor="autostart">Start with Windows</Label>
                     <Switch
+                      id="autostart"
                       checked={s.autostart}
                       onCheckedChange={(v) => {
                         setS({ ...s, autostart: v });
@@ -486,10 +554,12 @@ export function Settings() {
             <TabsContent value="profile">
               <Section
                 title="Personalization profile"
+                titleId="profile-heading"
                 hint={`Current source: ${sourceLabel[s.profileSource]}.`}
               >
                 {s.profilePath && <p className="font-mono text-xs text-fg-muted">{s.profilePath}</p>}
                 <Textarea
+                  aria-labelledby="profile-heading"
                   rows={12}
                   value={profileText}
                   onChange={(e) => setProfileText(e.target.value)}
@@ -501,7 +571,14 @@ export function Settings() {
                     onClick={() =>
                       ipc
                         .setProfile(profileText)
-                        .then(() => toast.success("Profile saved."))
+                        // Refetch para o hint "Current source" refletir que passou a
+                        // "edited by you" em vez de continuar a mostrar a origem antiga.
+                        .then(() => ipc.getSettings())
+                        .then((res) => {
+                          setS(res);
+                          setProfileText(res.profileText);
+                          toast.success("Profile saved.");
+                        })
                         .catch(() => toast.error("Couldn't save."))
                     }
                   >

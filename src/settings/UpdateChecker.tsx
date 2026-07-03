@@ -10,8 +10,9 @@ type Status = "idle" | "checking" | "up-to-date" | "downloading" | "ready" | "er
 export function UpdateChecker() {
   const [version, setVersion] = useState("");
   const [status, setStatus] = useState<Status>("idle");
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState<number | null>(0);
   const [newVersion, setNewVersion] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState("Couldn't check for updates. Try again later.");
 
   useEffect(() => {
     getVersion()
@@ -23,26 +24,38 @@ export function UpdateChecker() {
 
   const run = async () => {
     setStatus("checking");
+    // A verificacao e o download/instalacao falham por razoes diferentes: separa os try
+    // para a mensagem de erro dizer qual das fases falhou, em vez de "check failed" sempre.
+    let update;
     try {
-      const update = await check();
-      if (!update) {
-        setStatus("up-to-date");
-        return;
-      }
-      setNewVersion(update.version);
-      setStatus("downloading");
+      update = await check();
+    } catch {
+      setErrorMsg("Couldn't check for updates. Try again later.");
+      setStatus("error");
+      return;
+    }
+    if (!update) {
+      setStatus("up-to-date");
+      return;
+    }
+    setNewVersion(update.version);
+    setStatus("downloading");
+    try {
       let total = 0;
       let downloaded = 0;
+      // `null` = tamanho desconhecido -> barra indeterminada, em vez de ficar presa nos 0%.
+      setProgress(null);
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") {
           total = event.data.contentLength ?? 0;
         } else if (event.event === "Progress") {
           downloaded += event.data.chunkLength;
-          setProgress(total ? Math.min(100, Math.round((downloaded / total) * 100)) : 0);
+          setProgress(total ? Math.min(100, Math.round((downloaded / total) * 100)) : null);
         }
       });
       setStatus("ready");
     } catch {
+      setErrorMsg("Downloaded update failed to install. Try again later.");
       setStatus("error");
     }
   };
@@ -65,12 +78,18 @@ export function UpdateChecker() {
       {status === "downloading" && (
         <div className="flex flex-col gap-1.5">
           <p className="text-xs text-fg-muted">
-            Downloading {newVersion}… {progress}%
+            {progress === null
+              ? `Downloading ${newVersion}…`
+              : `Downloading ${newVersion}… ${progress}%`}
           </p>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
             <div
-              className="h-full rounded-full bg-accent transition-[width] duration-200"
-              style={{ width: `${progress}%` }}
+              className={
+                progress === null
+                  ? "h-full w-1/3 animate-pulse rounded-full bg-accent"
+                  : "h-full rounded-full bg-accent transition-[width] duration-200"
+              }
+              style={progress === null ? undefined : { width: `${progress}%` }}
             />
           </div>
         </div>
@@ -83,9 +102,7 @@ export function UpdateChecker() {
           </Button>
         </div>
       )}
-      {status === "error" && (
-        <p className="text-xs text-error">Couldn't check for updates. Try again later.</p>
-      )}
+      {status === "error" && <p className="text-xs text-error">{errorMsg}</p>}
     </div>
   );
 }

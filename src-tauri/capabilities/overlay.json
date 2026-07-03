@@ -4,8 +4,6 @@
   "description": "Permissoes minimas da janela overlay (hot path).",
   "windows": ["overlay"],
   "permissions": [
-    "core:default",
-    "global-shortcut:default",
-    "positioner:default"
+    "core:default"
   ]
 }

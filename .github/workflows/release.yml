@@ -53,6 +53,16 @@ jobs:
       - name: Verify package.json and Cargo.toml versions are in sync
         run: npm run version:check
 
+      # Gate the release on the test suite: never publish a build to auto-updating users
+      # if the pure logic (retry/fallback, prompt, capture) or the shell tests fail.
+      - name: Run tests
+        run: cargo test --workspace
+
+      # Typecheck the frontend before building the bundle (tauri-action runs `vite build`
+      # via beforeBuildCommand, but this surfaces a tsc failure as its own clear step).
+      - name: Typecheck frontend
+        run: npm run build
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,4 +72,15 @@ jobs:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseName: 'Ember ${{ needs.release-please.outputs.tag_name }}'
           releaseDraft: false
-          prerelease: false
+          # Keep it a prerelease during upload (release-please created it as one). The updater
+          # endpoint /releases/latest skips prereleases, so users stay on the last full release
+          # until the installer + latest.json are actually attached below.
+          prerelease: true
+
+      # Only now that the artifacts exist, promote the release to the latest full release.
+      # If the build failed above, this never runs and the release stays a prerelease, so
+      # /releases/latest keeps pointing at the previous good version (no 404, no bad update).
+      - name: Publish release now that artifacts are uploaded
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.release-please.outputs.tag_name }}" --prerelease=false --latest --repo "${{ github.repository }}"

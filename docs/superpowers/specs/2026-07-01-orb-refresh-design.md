@@ -29,7 +29,7 @@ durante o refino. Três problemas a corrigir:
 
 ### Rust (`src-tauri/src/lib.rs`)
 
-- **Bug root cause**: `monitor_work_area(w)` usa `w.current_monitor()` — o monitor da
+- **Bug root cause**: `monitor_work_area(w)` usa `w.current_monitor()`, o monitor da
   *janela*, não do cursor. Quando o cursor sai para outro ecrã, `orb_target()` calcula o
   alvo a partir da posição do cursor mas clampa-o aos limites do monitor onde a janela
   **ainda está**, prendendo o orb na borda.
@@ -73,7 +73,7 @@ implementação, correndo o `run` skill; não há um número "certo" a priori.
 
 ## 5. Testes
 
-- `ember-core::selection`: testes para a escolha de monitor por ponto — ponto dentro do
+- `ember-core::selection`: testes para a escolha de monitor por ponto: ponto dentro do
   monitor 1, ponto dentro do monitor 2 (dois monitores lado a lado), ponto na fronteira,
   ponto fora de todos (fallback). Sem SO/rede, como os testes de `clamp_pos` já existentes.
 - Verificação manual (skill `run`): com dois monitores (ou um monitor + simulação de
@@ -82,7 +82,7 @@ implementação, correndo o `run` skill; não há um número "certo" a priori.
 
 ## 6. Fora de âmbito (YAGNI)
 
-- Mudar a cor de `Pill.tsx` (success/error/hint) ou de qualquer outra UI — só o orb.
+- Mudar a cor de `Pill.tsx` (success/error/hint) ou de qualquer outra UI: só o orb.
 - Rebrand de `--color-accent` (Settings, Logo, botões).
 - Suporte a mais de dois monitores em simultâneo além do necessário para o fix (a lógica
   de "ponto dentro de retângulo" já escala para N monitores sem trabalho extra).

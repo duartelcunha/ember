@@ -13,28 +13,28 @@
 ## File Structure
 
 **ember-core (pure, no OS deps):**
-- Create `crates/ember-core/src/selection.rs` — `SelectionIo` trait, `Captured`, `capture`, `replace`, `restore`, `clamp_pos`; unit tests with fakes.
-- Modify `crates/ember-core/src/lib.rs` — `pub mod selection;`.
+- Create `crates/ember-core/src/selection.rs`: `SelectionIo` trait, `Captured`, `capture`, `replace`, `restore`, `clamp_pos`; unit tests with fakes.
+- Modify `crates/ember-core/src/lib.rs`: `pub mod selection;`.
 
 **src-tauri (shell / I/O):**
-- Create `src-tauri/src/selection.rs` — `RealIo` (arboard + enigo) implementing `ember_core::selection::SelectionIo`; `cursor_xy()`; timing constants.
-- Create `src-tauri/src/flow.rs` — `run_refine_flow()` and `refine_text()` orchestration.
-- Modify `src-tauri/src/lib.rs` — hotkey rewrite, `show_orb_at_cursor`/`hide_orb`, English tray, register new modules, drop manual/preview commands from the handler.
-- Modify `src-tauri/src/commands.rs` — remove `submit_manual`/`retry_refinement`/`accept_refinement`/`reject_refinement`/`copy_refinement`; English `friendly_error`.
-- Modify `src-tauri/src/state.rs` — remove `Pending`.
-- Modify `src-tauri/Cargo.toml` — add `enigo`, `arboard`.
-- Modify `src-tauri/tauri.conf.json` — overlay window → small (260x100).
-- Modify `src-tauri/capabilities/overlay.json` — drop clipboard-manager perm.
+- Create `src-tauri/src/selection.rs`: `RealIo` (arboard + enigo) implementing `ember_core::selection::SelectionIo`; `cursor_xy()`; timing constants.
+- Create `src-tauri/src/flow.rs`: `run_refine_flow()` and `refine_text()` orchestration.
+- Modify `src-tauri/src/lib.rs`: hotkey rewrite, `show_orb_at_cursor`/`hide_orb`, English tray, register new modules, drop manual/preview commands from the handler.
+- Modify `src-tauri/src/commands.rs`: remove `submit_manual`/`retry_refinement`/`accept_refinement`/`reject_refinement`/`copy_refinement`; English `friendly_error`.
+- Modify `src-tauri/src/state.rs`: remove `Pending`.
+- Modify `src-tauri/Cargo.toml`: add `enigo`, `arboard`.
+- Modify `src-tauri/tauri.conf.json`: overlay window → small (260x100).
+- Modify `src-tauri/capabilities/overlay.json`: drop clipboard-manager perm.
 
 **Frontend:**
-- Modify `src/overlay/types.ts` — phases `refining|success|error|hint|hidden`; trim controller.
-- Modify `src/overlay/useOverlayController.ts` — reduce to a state listener.
-- Modify `src/overlay/Overlay.tsx` — render Orb / Pill per phase.
-- Create `src/overlay/Pill.tsx` — small glass pill for hint/error/success.
+- Modify `src/overlay/types.ts`: phases `refining|success|error|hint|hidden`; trim controller.
+- Modify `src/overlay/useOverlayController.ts`: reduce to a state listener.
+- Modify `src/overlay/Overlay.tsx`: render Orb / Pill per phase.
+- Create `src/overlay/Pill.tsx`: small glass pill for hint/error/success.
 - Delete `src/overlay/Bubble.tsx`.
-- Create `src/components/Logo.tsx` — "Ember arc" SVG mark.
-- Modify `src/settings/Settings.tsx` — English + restyle + Logo.
-- Modify `src/styles/globals.css` — pill styles.
+- Create `src/components/Logo.tsx`: "Ember arc" SVG mark.
+- Modify `src/settings/Settings.tsx`: English + restyle + Logo.
+- Modify `src/styles/globals.css`: pill styles.
 
 **Icons:**
 - Render Logo → 1024px PNG → `npm run tauri icon`.
@@ -224,7 +224,7 @@ mod tests {
 
 - [ ] **Step 2: Register the module**
 
-Modify `crates/ember-core/src/lib.rs` — add alongside the other `pub mod` lines:
+Modify `crates/ember-core/src/lib.rs`: add alongside the other `pub mod` lines:
 
 ```rust
 pub mod selection;
@@ -252,7 +252,7 @@ git commit -m "feat(core): pure clipboard-sentinel selection sequencing"
 
 - [ ] **Step 1: Add dependencies**
 
-Modify `src-tauri/Cargo.toml` — under `[dependencies]`, replace the trailing comment line with:
+Modify `src-tauri/Cargo.toml`: under `[dependencies]`, replace the trailing comment line with:
 
 ```toml
 # Adapters nativos do loop in-place.
@@ -330,7 +330,7 @@ pub fn cursor_xy() -> Option<(i32, i32)> {
 
 - [ ] **Step 3: Register the module**
 
-Modify `src-tauri/src/lib.rs` — add near the other `mod` declarations:
+Modify `src-tauri/src/lib.rs`: add near the other `mod` declarations:
 
 ```rust
 mod selection;
@@ -360,7 +360,7 @@ git commit -m "feat(shell): RealIo (enigo+arboard) + cursor position"
 
 - [ ] **Step 1: Slim down state**
 
-Modify `src-tauri/src/state.rs` — remove the `Pending` struct and the `pending` field. Result:
+Modify `src-tauri/src/state.rs`: remove the `Pending` struct and the `pending` field. Result:
 
 ```rust
 //! Estado partilhado da app (managed state do Tauri).
@@ -583,7 +583,7 @@ pub(crate) fn show_orb_at_cursor(app: &AppHandle) {
         let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
     }
     let _ = w.show();
-    // NB: nao chamamos set_focus — o paste tem de ir para a app em foco.
+    // NB: nao chamamos set_focus. O paste tem de ir para a app em foco.
 }
 
 pub(crate) fn hide_orb(app: &AppHandle) {
@@ -657,11 +657,11 @@ git commit -m "feat(shell): auto-refine-in-place flow on hotkey"
 
 - [ ] **Step 1: Shrink the overlay window**
 
-Modify `src-tauri/tauri.conf.json` — the `overlay` window object: set `"width": 260, "height": 100` (keep `create:false`, `transparent:true`, `decorations:false`, `alwaysOnTop:true`, `skipTaskbar:true`, `shadow:false`, `focus:false`, `resizable:false`, `visible:false`).
+Modify `src-tauri/tauri.conf.json`: the `overlay` window object: set `"width": 260, "height": 100` (keep `create:false`, `transparent:true`, `decorations:false`, `alwaysOnTop:true`, `skipTaskbar:true`, `shadow:false`, `focus:false`, `resizable:false`, `visible:false`).
 
 - [ ] **Step 2: Trim overlay capability**
 
-Modify `src-tauri/capabilities/overlay.json` — remove `"clipboard-manager:default"` (clipboard now via arboard). Result permissions: `["core:default", "global-shortcut:default", "positioner:default"]`.
+Modify `src-tauri/capabilities/overlay.json`: remove `"clipboard-manager:default"` (clipboard now via arboard). Result permissions: `["core:default", "global-shortcut:default", "positioner:default"]`.
 
 - [ ] **Step 3: Verify config parses**
 

@@ -8,8 +8,9 @@ use serde_json::{json, Value};
 pub const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Modelo Gemini primario por defeito (ultimo Flash, com thinking).
 pub const DEFAULT_GEMINI_MODEL: &str = "gemini-2.5-flash";
-/// Modelo Claude de fallback por defeito.
-pub const DEFAULT_CLAUDE_MODEL: &str = "claude-sonnet-4-6";
+/// Modelo Claude de fallback por defeito: o tier barato e rapido (Haiku), comparavel em custo
+/// ao Gemini Flash. NAO o Sonnet (bem mais caro) por defeito; fica como opcao para quem quiser.
+pub const DEFAULT_CLAUDE_MODEL: &str = "claude-haiku-4-5";
 
 // ---------------------------------------------------------------------------------------
 // Gemini

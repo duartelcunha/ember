@@ -31,7 +31,7 @@ import {
 } from "@/lib/ipc";
 
 const GEMINI_PRESETS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
-const CLAUDE_PRESETS = ["claude-sonnet-4-6"];
+const CLAUDE_PRESETS = ["claude-haiku-4-5", "claude-sonnet-4-6"];
 const CUSTOM = "__custom__";
 
 function Section({
@@ -512,7 +512,7 @@ export function Settings() {
                 <ProviderConfig
                   kind="claude"
                   title="Claude (fallback)"
-                  subtitle="Optional. Kicks in when Gemini fails, or for max quality."
+                  subtitle="Optional. A cheap, fast fallback (Haiku) for when Gemini fails. Pick Sonnet for max quality."
                   hasKey={s.hasClaudeKey}
                   model={s.claudeModel}
                   presets={CLAUDE_PRESETS}

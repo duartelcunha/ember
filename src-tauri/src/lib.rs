@@ -382,6 +382,22 @@ pub fn run() {
                 cfg.debug_mode,
                 cfg.hotkey
             );
+            // Reconcilia o bool de autostart com o estado real do plugin (a fonte de verdade
+            // do SO). Podiam divergir (config editada a mao, entrada removida por fora); sem
+            // isto, get_settings mostrava um valor possivelmente obsoleto.
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                if let Ok(actual) = handle.autolaunch().is_enabled() {
+                    if actual != cfg.autostart {
+                        log::info!("autostart drift: config={}, actual={actual}; syncing config", cfg.autostart);
+                        let mut synced = cfg.clone();
+                        synced.autostart = actual;
+                        if let Err(e) = config::save(&handle, &synced) {
+                            log::warn!("autostart: could not persist reconciled state: {e}");
+                        }
+                    }
+                }
+            }
             // Se o atalho guardado nao registar (ocupado por outra app, ou invalido de uma
             // versao anterior), abre as settings em vez de arrancar sem hotkey em silencio.
             if let Err(e) = register_hotkey(&handle, &cfg.hotkey) {

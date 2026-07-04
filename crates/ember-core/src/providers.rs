@@ -255,19 +255,6 @@ pub fn parse_sse_data_lines(event_block: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Recorta `text` para as ultimas `max_chars` (por char, nao por byte, para nunca partir um
-/// UTF-8 a meio) com reticencias no inicio se algo ficou de fora. Usado para mostrar uma
-/// pre-visualizacao do texto a ser gerado junto ao orb sem deixar a legenda crescer sem fim.
-pub fn tail_preview(text: &str, max_chars: usize) -> String {
-    let count = text.chars().count();
-    if count <= max_chars {
-        return text.to_string();
-    }
-    let skip = count - max_chars;
-    let tail: String = text.chars().skip(skip).collect();
-    format!("...{tail}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -479,26 +466,6 @@ mod tests {
 
         assert_eq!(parse_sse_data_lines("data: [DONE]"), Vec::<&str>::new());
         assert_eq!(parse_sse_data_lines("data:{\"y\":2}"), vec!["{\"y\":2}"]);
-    }
-
-    #[test]
-    fn tail_preview_passes_short_text_through_unchanged() {
-        assert_eq!(tail_preview("short", 40), "short");
-    }
-
-    #[test]
-    fn tail_preview_truncates_long_text_from_the_front() {
-        let long = "a".repeat(100);
-        let p = tail_preview(&long, 10);
-        assert_eq!(p, format!("...{}", "a".repeat(10)));
-    }
-
-    #[test]
-    fn tail_preview_counts_chars_not_bytes() {
-        // CJK: cada char e varios bytes; o corte tem de ser por char, senao partia um char.
-        let cjk = "字".repeat(20);
-        let p = tail_preview(&cjk, 5);
-        assert_eq!(p.chars().filter(|&c| c == '字').count(), 5);
     }
 
     #[test]

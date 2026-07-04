@@ -29,7 +29,7 @@ export interface EmberSettings {
 }
 
 export const DEFAULT_SETTINGS: EmberSettings = {
-  geminiModel: "gemini-3.5-flash",
+  geminiModel: "gemini-2.5-flash",
   claudeModel: "claude-sonnet-4-6",
   hotkey: "CmdOrCtrl+Shift+Space",
   autostart: false,

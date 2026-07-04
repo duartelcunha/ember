@@ -165,33 +165,6 @@ pub fn clamp_window_for_content(
     (cx - content_dx, cy - content_dy)
 }
 
-/// Caso particular de `clamp_window_for_content` com o conteudo centrado na janela.
-pub fn clamp_pos_by_content(
-    tlx: i32,
-    tly: i32,
-    ww: i32,
-    wh: i32,
-    cw: i32,
-    ch: i32,
-    area_x: i32,
-    area_y: i32,
-    area_w: i32,
-    area_h: i32,
-) -> (i32, i32) {
-    clamp_window_for_content(
-        tlx,
-        tly,
-        (ww - cw) / 2,
-        (wh - ch) / 2,
-        cw,
-        ch,
-        area_x,
-        area_y,
-        area_w,
-        area_h,
-    )
-}
-
 /// Encontra o monitor (retangulo x,y,w,h) que contem o ponto (px,py), tipicamente o
 /// cursor. Usado para clampar o orb ao ecra ONDE O CURSOR ESTA, nao ao ecra da janela
 /// (que fica desatualizado quando o cursor muda de monitor a meio do seguimento).
@@ -406,40 +379,6 @@ mod tests {
         let monitors = [(0, 0, 1920, 1080)];
         assert_eq!(monitor_containing(-10, 500, &monitors), None);
         assert_eq!(monitor_containing(500, 2000, &monitors), None);
-    }
-
-    #[test]
-    fn clamp_pos_by_content_matches_clamp_pos_when_content_fills_window() {
-        let a = clamp_pos_by_content(1900, 1060, 300, 140, 300, 140, 0, 0, 1920, 1080);
-        let b = clamp_pos(1900, 1060, 300, 140, 0, 0, 1920, 1080);
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn clamp_pos_by_content_keeps_small_centered_content_flush_with_bottom_right_edge() {
-        // Janela 300x140 com um orb 24x24 centrado, cursor perto do canto inferior
-        // direito de um monitor 1920x1080: a janela toda ultrapassaria o monitor, mas
-        // o conteudo visivel (o orb) tem de ficar mesmo encostado a borda, nao a
-        // 138/58px de distancia dela (que e o que um clamp da janela inteira dava).
-        let (tlx, tly) =
-            clamp_pos_by_content(1900, 1060, 300, 140, 24, 24, 0, 0, 1920, 1080);
-        assert_eq!((tlx, tly), (1758, 998));
-        // O orb (centrado na janela) fica exatamente encostado ao canto do monitor.
-        assert_eq!((tlx + (300 - 24) / 2, tly + (140 - 24) / 2), (1896, 1056));
-    }
-
-    #[test]
-    fn clamp_pos_by_content_keeps_small_centered_content_flush_with_top_left_edge() {
-        let (tlx, tly) = clamp_pos_by_content(-200, -200, 300, 140, 24, 24, 0, 0, 1920, 1080);
-        assert_eq!((tlx, tly), (-138, -58));
-        assert_eq!((tlx + (300 - 24) / 2, tly + (140 - 24) / 2), (0, 0));
-    }
-
-    #[test]
-    fn clamp_pos_by_content_is_a_centered_case_of_clamp_window_for_content() {
-        let a = clamp_window_for_content(100, 100, (300 - 20) / 2, (140 - 20) / 2, 20, 20, 0, 0, 1920, 1080);
-        let b = clamp_pos_by_content(100, 100, 300, 140, 20, 20, 0, 0, 1920, 1080);
-        assert_eq!(a, b);
     }
 
     #[test]

@@ -71,6 +71,8 @@ impl Config {
     /// aceites pela UI, para um `capture_step_ms: 0` (busy-loop) nunca chegar ao runtime.
     fn sanitize(mut self) -> Self {
         let d = Config::default();
+        // Migracao: `gemini-3.5-flash` foi um default fantasma (modelo inexistente) de uma
+        // versao anterior; reescreve-o para o default valido para nao ir parar ao pedido.
         if self.gemini_model.trim().is_empty() || self.gemini_model == "gemini-3.5-flash" {
             self.gemini_model = d.gemini_model;
         }

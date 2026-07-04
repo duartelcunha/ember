@@ -17,14 +17,6 @@ const STATE_EVENT: &str = "ember://state";
 /// os key-ups (ver `ember_core::selection::capture`).
 const NEUTRALIZE_TIMEOUT_MS: u64 = 200;
 
-/// Tamanho maximo da pre-visualizacao mostrada junto ao orb enquanto o texto e gerado.
-/// A legenda e uma bolha pequena junto ao cursor, nao uma janela de chat: mostra so a
-/// CAUDA do texto (o que acabou de ser escrito), cortada, nao o texto inteiro. Curto de
-/// proposito: durante o orb (fase "refining") a janela clampa so a caixa minuscula do orb
-/// ao ecra (ver `ORB_CONTENT_SIZE` em lib.rs), nao a legenda; um texto longo arriscava sair
-/// da janela fixa de 300px perto de uma borda do ecra.
-const STREAM_PREVIEW_MAX_CHARS: usize = 36;
-
 /// Timing de captura/paste, configuravel nas settings (Advanced).
 #[derive(Debug, Clone, Copy)]
 pub struct CaptureTiming {
@@ -194,17 +186,11 @@ pub async fn run(app: AppHandle, terminal: bool, timing: CaptureTiming) {
         return;
     }
 
-    // Feedback de progresso: torna visivel o retry, o fallback E o proprio texto a ser
-    // gerado, em vez de um orb mudo. `preview` acumula o texto do intento ATUAL; cada novo
-    // intento (retry ou fallback) limpa-o, para nao misturar texto descartado com o novo.
-    let preview = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-
+    // Feedback de progresso honesto: torna visivel o retry e o fallback (nao a cauda do texto
+    // a ser gerado, que sao tokens internos e nao o que sera colado). O orb + "Trying/Retrying
+    // {provider}" chega para o utilizador perceber que ainda esta a trabalhar.
     let app_cb = app.clone();
-    let preview_for_attempt = preview.clone();
     let on_attempt = move |provider: Provider, idx: usize, attempt: u32| {
-        if let Ok(mut p) = preview_for_attempt.lock() {
-            p.clear();
-        }
         let msg = if idx == 0 && attempt == 0 {
             None // primeira tentativa do provider primario: o "refining" ja esta a mostra
         } else if attempt > 0 {
@@ -217,10 +203,9 @@ pub async fn run(app: AppHandle, terminal: bool, timing: CaptureTiming) {
         }
     };
 
-    let on_delta = move |_delta: &str| {
-        // The user requested not to see the streaming text preview
-        // before the "Refined." message appears.
-    };
+    // O preview de streaming fica desligado de proposito (ver acima): o texto cru pre-engine
+    // nao e o que se cola. `on_delta` mantem-se como no-op para a assinatura de `refine`.
+    let on_delta = |_delta: &str| {};
 
     let state = app.state::<AppState>();
     // Refina com cancelamento: corre em `select!` contra o `cancel_notify`, para a segunda

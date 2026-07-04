@@ -15,8 +15,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # `devtools` expoe o inspetor tambem em release, para o modo debug o poder abrir sob demanda
-# (fica atras do toggle `debug_mode`; um utilizador normal nunca o ve).
-tauri = { version = "2", features = ["tray-icon", "devtools"] }
+# (fica atras do toggle `debug_mode`; um utilizador normal nunca o ve). `macos-private-api`
+# permite as janelas transparentes no macOS (no-op no Windows, gated internamente).
+tauri = { version = "2", features = ["tray-icon", "devtools", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"

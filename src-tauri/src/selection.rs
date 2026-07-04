@@ -18,10 +18,24 @@ pub struct ClipImage {
     bytes: Vec<u8>,
 }
 
+/// Modificador do atalho de clipboard, por SO. macOS copia/cola com Cmd (que o enigo chama
+/// `Key::Meta`); Windows/Linux com Ctrl. `enigo` e `arboard` sao cross-platform, por isso so a
+/// escolha da tecla e que muda entre plataformas.
+#[cfg(target_os = "macos")]
+fn clipboard_modifier() -> Key {
+    Key::Meta
+}
+#[cfg(not(target_os = "macos"))]
+fn clipboard_modifier() -> Key {
+    Key::Control
+}
+
 pub struct RealIo {
     clip: arboard::Clipboard,
     enigo: Enigo,
-    /// Terminal em foco: usar Ctrl+Shift+C/V (o Ctrl+C envia SIGINT nos terminais).
+    /// Terminal em foco: no Windows usa Ctrl+Shift+C/V (o Ctrl+C envia SIGINT nos terminais). No
+    /// macOS o copy/paste e sempre Cmd+C/V (mesmo em terminais), por isso isto fica sempre falso
+    /// la (a deteccao de terminal so corre no Windows).
     terminal: bool,
 }
 
@@ -62,9 +76,11 @@ impl RealIo {
         has_unpreservable_clipboard()
     }
 
-    /// Simula um atalho de clipboard: Ctrl(+Shift)+`key`.
+    /// Simula um atalho de clipboard: <modificador>(+Shift)+`key`. O modificador e Cmd no macOS,
+    /// Ctrl no resto. O Shift so entra no modo terminal (so no Windows).
     fn combo(&mut self, key: char) {
-        let _ = self.enigo.key(Key::Control, Press);
+        let modifier = clipboard_modifier();
+        let _ = self.enigo.key(modifier, Press);
         if self.terminal {
             let _ = self.enigo.key(Key::Shift, Press);
         }
@@ -72,7 +88,7 @@ impl RealIo {
         if self.terminal {
             let _ = self.enigo.key(Key::Shift, Release);
         }
-        let _ = self.enigo.key(Key::Control, Release);
+        let _ = self.enigo.key(modifier, Release);
     }
 }
 

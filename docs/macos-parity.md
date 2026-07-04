@@ -1,13 +1,29 @@
-# macOS parity: implementation spec
-
-Everything below is the remaining work to ship Ember on macOS. It is written to be picked up in a
-session running **on a Mac** (the native code cannot be compiled or tested on the Windows dev box, so it
-was intentionally not written blind). The rest of the codebase is already cross-platform-ready: the
-non-Windows code paths return safe stubs, all the decision logic in `ember-core` is portable, and the
-project-context design already accounts for the macOS title source.
+# macOS parity: status + remaining spec
 
 The Windows behavior must stay untouched: every change here is gated behind `#[cfg(target_os = "macos")]`
 or `[target.'cfg(target_os = "macos")'.dependencies]`.
+
+## Status
+
+**Already done on this branch (compiles; Windows build unaffected):**
+- **§3 Core capture/paste** — the copy/paste modifier is now per-OS: Cmd on macOS (`enigo`'s `Key::Meta`),
+  Ctrl elsewhere. `enigo` + `arboard` are cross-platform, so the whole capture -> refine -> paste loop
+  works on macOS through the same code. This is the core function of the app.
+- **§6 Packaging** — `app.macOSPrivateApi: true` (+ the `macos-private-api` Tauri feature) for transparent
+  windows, `bundle.targets` now includes `app` + `dmg` (Tauri builds only the host's targets, so the
+  Windows `nsis` build is unchanged), and `bundle.macOS.minimumSystemVersion`.
+
+**Remaining (needs a Mac to compile + test):** the native window-title read for project-context on macOS
+(§2), any window-level tweak if the orb doesn't float over fullscreen apps (§5), CI signing/notarization
+(§7), and the runtime Accessibility prompt (below). These were intentionally not written blind: a native
+objc compile error would break the whole macOS build, which is worse than the graceful degradation the app
+has today (on macOS, project-context detection returns `None` and refining falls back to the global profile,
+exactly as if no project were detected).
+
+> **Accessibility permission (required on macOS):** `enigo` needs the Accessibility permission to
+> synthesize the Cmd+C / Cmd+V keystrokes. On first run the app must be granted Accessibility in
+> System Settings > Privacy & Security > Accessibility, or the paste silently no-ops. Add a runtime
+> `AXIsProcessTrustedWithOptions` prompt and a clear Settings note when it is not granted.
 
 ## 1. Dependencies (`src-tauri/Cargo.toml`)
 

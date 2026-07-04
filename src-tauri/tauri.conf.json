@@ -80,11 +80,12 @@
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "app", "dmg"],
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
@@ -99,6 +100,9 @@
         "installMode": "currentUser",
         "installerHooks": "./installer-hooks.nsh"
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
     }
   },
   "plugins": {

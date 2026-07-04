@@ -12,6 +12,7 @@ pub mod model;
 pub mod modifiers;
 pub mod overlay;
 pub mod profile_path;
+pub mod project;
 pub mod prompt;
 pub mod providers;
 pub mod retry;

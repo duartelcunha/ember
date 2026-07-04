@@ -140,7 +140,13 @@ async fn abort_cancelled(
 }
 
 /// Orquestra todo o fluxo. `terminal` = a app em foco e um terminal (Ctrl+Shift+C/V).
-pub async fn run(app: AppHandle, terminal: bool, timing: CaptureTiming) {
+/// `project_title` = titulo da janela em foco (para contexto de projeto), ou `None` se desligado.
+pub async fn run(
+    app: AppHandle,
+    terminal: bool,
+    timing: CaptureTiming,
+    project_title: Option<String>,
+) {
     emit(&app, "refining", None, None);
 
     let out = match tauri::async_runtime::spawn_blocking(move || {
@@ -210,7 +216,14 @@ pub async fn run(app: AppHandle, terminal: bool, timing: CaptureTiming) {
     let state = app.state::<AppState>();
     // Refina com cancelamento: corre em `select!` contra o `cancel_notify`, para a segunda
     // tecla poder abortar a chamada HTTP a meio (o drop do future cancela o pedido reqwest).
-    let refine_fut = commands::refine_text(&app, state.inner(), &selected, &on_attempt, &on_delta);
+    let refine_fut = commands::refine_text(
+        &app,
+        state.inner(),
+        &selected,
+        project_title.as_deref(),
+        &on_attempt,
+        &on_delta,
+    );
     tokio::pin!(refine_fut);
     let outcome = loop {
         tokio::select! {

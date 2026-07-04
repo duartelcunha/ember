@@ -36,6 +36,7 @@ export interface EmberSettings {
   captureStepMs: number;
   pasteSettleMs: number;
   debugMode: boolean;
+  projectContext: boolean;
 }
 
 export const DEFAULT_SETTINGS: EmberSettings = {
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: EmberSettings = {
   captureStepMs: 10,
   pasteSettleMs: 90,
   debugMode: false,
+  projectContext: false,
 };
 
 /** Comandos Tauri das settings. Implementados no nucleo Rust. */
@@ -74,6 +76,7 @@ export const ipc = {
   setThinking: (enabled: boolean, level: ThinkingLevel) =>
     invoke<void>("set_thinking", { enabled, level }),
   setTerminalHandling: (enabled: boolean) => invoke<void>("set_terminal_handling", { enabled }),
+  setProjectContext: (enabled: boolean) => invoke<void>("set_project_context", { enabled }),
   setCaptureTiming: (polls: number, stepMs: number, settleMs: number) =>
     invoke<EmberSettings>("set_capture_timing", { polls, stepMs, settleMs }),
   setProfile: (text: string) => invoke<void>("set_profile", { text }),

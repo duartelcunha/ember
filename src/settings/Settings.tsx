@@ -591,6 +591,25 @@ export function Settings() {
                 </Section>
   
                 <Section
+                  title="Project context"
+                  hint="Detects the CLAUDE.md, AGENTS.md or GEMINI.md of the project in your focused window and merges it with your global profile. Off by default: turn it on only where you're OK sending a project's conventions to the LLM. Ember reads only those known files, redacts secret-shaped lines, and falls back to your global profile when no project is detected."
+                >
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="project-context">Use the focused project's CLAUDE.md</Label>
+                    <Switch
+                      id="project-context"
+                      checked={s.projectContext}
+                      onCheckedChange={(v) => {
+                        setS({ ...s, projectContext: v });
+                        ipc
+                          .setProjectContext(v)
+                          .catch(() => setS((prev) => ({ ...prev, projectContext: !v })));
+                      }}
+                    />
+                  </div>
+                </Section>
+
+                <Section
                   title="Advanced"
                   hint="Capture timing, for power users. The defaults work for almost everyone."
                 >

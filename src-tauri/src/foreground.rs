@@ -42,6 +42,37 @@ pub fn is_terminal_foreground() -> bool {
     false
 }
 
+/// Titulo da janela em foco. Sinal (seguro, sem ler memoria de outro processo) para a deteccao
+/// de contexto de projeto: muitos IDEs/terminais mostram o caminho do projeto no titulo. macOS
+/// virá com o AXTitle (a permissao de Acessibilidade e ja precisa para o paste). Windows aqui.
+#[cfg(windows)]
+pub fn foreground_title() -> Option<String> {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    };
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return None;
+        }
+        let len = GetWindowTextLengthW(hwnd);
+        if len <= 0 {
+            return None;
+        }
+        let mut buf = vec![0u16; (len + 1) as usize];
+        let copied = GetWindowTextW(hwnd, &mut buf);
+        if copied <= 0 {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buf[..copied as usize]))
+    }
+}
+
+#[cfg(not(windows))]
+pub fn foreground_title() -> Option<String> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::is_terminal_exe;

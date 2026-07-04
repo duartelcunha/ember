@@ -36,6 +36,10 @@ pub struct Config {
     /// Modo debug: abre as devtools nas settings e mostra o painel de diagnostico. O ficheiro
     /// de log capta sempre; isto controla a superficie visivel ao utilizador. Default off.
     pub debug_mode: bool,
+    /// Contexto de projeto: deteta o CLAUDE.md/AGENTS.md/GEMINI.md do projeto em foco e junta-o
+    /// ao perfil global. Default OFF (privacidade: um repo de cliente nao deve ir para o LLM sem
+    /// o utilizador ligar isto). So-leitura de ficheiros de contexto conhecidos, com redacao.
+    pub project_context: bool,
 }
 
 /// Limites do timing de captura. Fonte unica: `commands::set_capture_timing` e a
@@ -61,6 +65,7 @@ impl Default for Config {
             capture_step_ms: 10,
             paste_settle_ms: 90,
             debug_mode: false,
+            project_context: false,
         }
     }
 }

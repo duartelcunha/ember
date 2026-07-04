@@ -7,6 +7,7 @@ mod flow;
 mod foreground;
 mod logging;
 mod profile;
+mod project;
 mod providers;
 mod secrets;
 mod selection;
@@ -285,8 +286,14 @@ pub(crate) fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), Strin
             // Arranque limpo: sem cancelamento pendente de um ciclo anterior.
             st.cancel.store(false, Ordering::SeqCst);
             let cfg = config::load(app);
-            // Deteta o terminal ANTES de mostrar o orb (a app em foco e ainda o alvo).
+            // Deteta o terminal E captura o titulo da janela (para contexto de projeto) ANTES de
+            // mostrar o orb: a app em foco ainda e o alvo, o nosso orb nao rouba o foco.
             let terminal = cfg.terminal_handling && foreground::is_terminal_foreground();
+            let project_title = if cfg.project_context {
+                foreground::foreground_title()
+            } else {
+                None
+            };
             let timing = flow::CaptureTiming {
                 polls: cfg.capture_polls,
                 step_ms: cfg.capture_step_ms,
@@ -295,7 +302,7 @@ pub(crate) fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), Strin
             show_orb_at_cursor(app);
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                flow::run(app.clone(), terminal, timing).await;
+                flow::run(app.clone(), terminal, timing, project_title).await;
                 // Liberta a guarda so no fim do ciclo (o orb ja foi escondido dentro de run):
                 // ate aqui, o hide_after deste ciclo nao pode ser pisado por outra tecla.
                 app.state::<state::AppState>()
@@ -374,6 +381,7 @@ pub fn run() {
             commands::set_mode,
             commands::set_thinking,
             commands::set_terminal_handling,
+            commands::set_project_context,
             commands::set_capture_timing,
             commands::set_api_key,
             commands::clear_api_key,

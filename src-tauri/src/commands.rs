@@ -33,6 +33,7 @@ pub struct SettingsDto {
     capture_step_ms: u64,
     paste_settle_ms: u64,
     debug_mode: bool,
+    project_context: bool,
 }
 
 fn source_str(s: ProfileSource) -> &'static str {
@@ -80,6 +81,7 @@ fn build_dto(app: &AppHandle, cfg: &config::Config) -> SettingsDto {
         capture_step_ms: cfg.capture_step_ms,
         paste_settle_ms: cfg.paste_settle_ms,
         debug_mode: cfg.debug_mode,
+        project_context: cfg.project_context,
     }
 }
 
@@ -166,6 +168,13 @@ pub fn set_thinking(app: AppHandle, enabled: bool, level: String) -> Result<(), 
 pub fn set_terminal_handling(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.terminal_handling = enabled;
+    config::save(&app, &cfg).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_project_context(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.project_context = enabled;
     config::save(&app, &cfg).map_err(|e| e.to_string())
 }
 
@@ -375,6 +384,7 @@ pub(crate) async fn refine_text(
     app: &AppHandle,
     state: &AppState,
     input: &str,
+    foreground_title: Option<&str>,
     on_attempt: &(dyn Fn(Provider, usize, u32) + Send + Sync),
     on_delta: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<(String, ember_core::Prepared, String), ember_core::CoreError> {
@@ -399,6 +409,20 @@ pub(crate) async fn refine_text(
     }
 
     let resolved = profile::resolve(app, cfg.profile_override.as_deref(), cfg.ignore_claude_md);
+    // Contexto de projeto (best-effort, so quando ligado): junta o CLAUDE.md/AGENTS.md do projeto
+    // em foco ao perfil global. Qualquer falha -> None -> segue so com o global (comportamento
+    // de sempre). O `foreground_title` so vem preenchido quando `config.project_context` esta on.
+    let project_ctx = foreground_title.and_then(|t| {
+        let home = app.path().home_dir().ok();
+        crate::project::resolve(t, home.as_deref())
+    });
+    match &project_ctx {
+        Some(pc) => log::info!("project context: merged {}", pc.source_path),
+        None if foreground_title.is_some() => {
+            log::debug!("project context: enabled, none detected for the foreground window")
+        }
+        None => {}
+    }
     // Motor Ember, fase 1: normaliza o input, mascara codigo/URLs e escapa marcadores. O modelo
     // ve o `masked_input`; o `prepared` volta para o `flow.rs` reconstruir o output.
     let prepared = ember_core::precondition(input, cfg.mode);
@@ -409,6 +433,7 @@ pub(crate) async fn refine_text(
         cfg.mode,
         cfg.thinking_enabled,
         &cfg.thinking_level,
+        project_ctx.as_ref().map(|pc| pc.block.as_str()),
     );
     let rcfg = RetryConfig {
         provider_count: chain.len(),

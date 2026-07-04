@@ -73,8 +73,15 @@ fn cap_profile(text: &str, max: usize) -> &str {
     }
 }
 
-/// Constroi o system prompt final, injetando o perfil do utilizador quando existe.
-pub fn build_system_prompt(profile: &Profile, mode: RefineMode) -> String {
+/// Constroi o system prompt final: base + regra do modo + perfil GLOBAL + (opcional) contexto
+/// do PROJETO. Ordem deliberada: o bloco de projeto vem por ultimo (e a parte volatil, mantem
+/// um prefixo estavel para cache, e instrucoes mais abaixo pesam ligeiramente mais). O
+/// `project_block` ja vem enquadrado e capado de `ember_core::project::frame_project`.
+pub fn build_system_prompt(
+    profile: &Profile,
+    mode: RefineMode,
+    project_block: Option<&str>,
+) -> String {
     let mode_rule = match mode {
         RefineMode::Adaptive => ADAPTIVE_RULE,
         RefineMode::Polish => POLISH_RULE,
@@ -92,6 +99,11 @@ pub fn build_system_prompt(profile: &Profile, mode: RefineMode) -> String {
              rules). Apply them, but do not cite them or include them in the output:\n",
         );
         out.push_str(cap_profile(&profile.text, MAX_PROFILE_CHARS));
+    }
+
+    if let Some(block) = project_block {
+        out.push_str("\n\n");
+        out.push_str(block);
     }
     out
 }
@@ -130,10 +142,11 @@ pub fn build_llm_request(
     mode: RefineMode,
     thinking: bool,
     thinking_level: &str,
+    project_block: Option<&str>,
 ) -> LlmRequest {
     LlmRequest {
         model: model.to_string(),
-        system: build_system_prompt(profile, mode),
+        system: build_system_prompt(profile, mode, project_block),
         user: format!("{INPUT_OPEN}\n{input}\n{INPUT_CLOSE}"),
         max_tokens: output_budget(input, mode, thinking),
         temperature: 0.3,
@@ -156,7 +169,7 @@ mod tests {
 
     #[test]
     fn system_prompt_has_core_guarantees() {
-        let s = build_system_prompt(&empty_profile(), RefineMode::Adaptive);
+        let s = build_system_prompt(&empty_profile(), RefineMode::Adaptive, None);
         assert!(s.contains("ONLY the refined prompt"));
         assert!(s.contains("SAME language"));
         assert!(s.contains("accents"));
@@ -177,6 +190,7 @@ mod tests {
             RefineMode::Adaptive,
             false,
             "high",
+            None,
         );
         assert!(req.user.starts_with(INPUT_OPEN));
         assert!(req.user.trim_end().ends_with(INPUT_CLOSE));
@@ -189,7 +203,7 @@ mod tests {
             text: "Nunca usar em-dashes. Responder em portugues.".into(),
             source: ProfileSource::ClaudeMd,
         };
-        let s = build_system_prompt(&p, RefineMode::Adaptive);
+        let s = build_system_prompt(&p, RefineMode::Adaptive, None);
         assert!(s.contains("User profile and preferences"));
         assert!(s.contains("em-dashes"));
     }
@@ -198,7 +212,7 @@ mod tests {
     fn profile_is_capped_to_the_ceiling() {
         let big = "x".repeat(MAX_PROFILE_CHARS * 3);
         let p = Profile { text: big, source: ProfileSource::ClaudeMd };
-        let s = build_system_prompt(&p, RefineMode::Adaptive);
+        let s = build_system_prompt(&p, RefineMode::Adaptive, None);
         // O bloco do perfil (depois do preambulo) nao pode passar o teto.
         let injected = s.split("output:\n").nth(1).unwrap();
         assert!(injected.chars().count() <= MAX_PROFILE_CHARS);
@@ -215,8 +229,8 @@ mod tests {
 
     #[test]
     fn mode_changes_the_rule() {
-        let polish = build_system_prompt(&empty_profile(), RefineMode::Polish);
-        let turbo = build_system_prompt(&empty_profile(), RefineMode::Turbo);
+        let polish = build_system_prompt(&empty_profile(), RefineMode::Polish, None);
+        let turbo = build_system_prompt(&empty_profile(), RefineMode::Turbo, None);
         assert!(polish.contains("Only polish"));
         assert!(turbo.contains("to the maximum"));
     }
@@ -261,11 +275,26 @@ mod tests {
             RefineMode::Adaptive,
             true,
             "high",
+            None,
         );
         assert!(req.user.contains("ola mundo"));
         assert_eq!(req.model, "gemini-3.5-flash");
         assert!(req.thinking);
         assert_eq!(req.thinking_level, "high");
         assert!(req.max_tokens >= 256);
+    }
+
+    #[test]
+    fn project_block_is_appended_after_the_global_profile() {
+        let p = Profile {
+            text: "Global rule: no em-dashes.".into(),
+            source: ProfileSource::ClaudeMd,
+        };
+        let project = "[EMBER_PROJECT_CONTEXT]\nUse tabs, not spaces.\n[/EMBER_PROJECT_CONTEXT]";
+        let s = build_system_prompt(&p, RefineMode::Adaptive, Some(project));
+        assert!(s.contains("no em-dashes"));
+        assert!(s.contains("[EMBER_PROJECT_CONTEXT]"));
+        // O bloco de projeto vem DEPOIS do perfil global (ordem cache-friendly + peso).
+        assert!(s.find("no em-dashes").unwrap() < s.find("Use tabs").unwrap());
     }
 }

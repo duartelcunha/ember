@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import { toast } from "sonner";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import {
   GearSix,
   Keyboard,
@@ -254,6 +256,7 @@ const MODE_COPY: Record<RefineMode, { title: string; hint: string }> = {
 const THINKING_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high"];
 
 export function Settings() {
+  const [isVisible, setIsVisible] = useState(true);
   const [s, setS] = useState<EmberSettings>(DEFAULT_SETTINGS);
   const [profileText, setProfileText] = useState("");
   const [hotkey, setHotkey] = useState(DEFAULT_SETTINGS.hotkey);
@@ -261,6 +264,27 @@ export function Settings() {
   const [polls, setPolls] = useState(DEFAULT_SETTINGS.capturePolls);
   const [stepMs, setStepMs] = useState(DEFAULT_SETTINGS.captureStepMs);
   const [settleMs, setSettleMs] = useState(DEFAULT_SETTINGS.pasteSettleMs);
+
+  useEffect(() => {
+    // Intercept native close to do a smooth fade-out
+    const unlistenClose = getCurrentWindow().onCloseRequested(async (event) => {
+      event.preventDefault();
+      setIsVisible(false);
+      setTimeout(() => {
+        getCurrentWindow().hide();
+      }, 250);
+    });
+    
+    // Listen for settings-opened to trigger the fade-in
+    const unlistenOpen = listen("settings-opened", () => {
+      setIsVisible(true);
+    });
+
+    return () => {
+      unlistenClose.then((f) => f());
+      unlistenOpen.then((f) => f());
+    };
+  }, []);
 
   useEffect(() => {
     ipc
@@ -322,7 +346,15 @@ export function Settings() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <main className="min-h-screen bg-panel text-fg">
+      <AnimatePresence>
+        {isVisible && (
+          <motion.main 
+            className="min-h-screen bg-panel text-fg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
         <motion.div
           className="mx-auto max-w-3xl px-8 py-12"
           initial={{ opacity: 0, y: 6 }}
@@ -645,7 +677,9 @@ export function Settings() {
             </TabsContent>
           </Tabs>
         </motion.div>
-      </main>
+          </motion.main>
+        )}
+      </AnimatePresence>
     </MotionConfig>
   );
 }

@@ -15,7 +15,7 @@ use std::sync::atomic::Ordering;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow, WebviewWindowBuilder, Emitter};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -164,14 +164,29 @@ async fn orb_follow_loop(app: AppHandle) {
     let Some(w) = app.get_webview_window("overlay") else {
         return;
     };
-    let mut tick = tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / 60.0));
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / 120.0));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    
+    let mut current_x: Option<f64> = None;
+    let mut current_y: Option<f64> = None;
+    
     loop {
         if !matches!(w.is_visible(), Ok(true)) {
             break;
         }
         if let Some((tx, ty)) = orb_target(&app, &w) {
-            let _ = w.set_position(PhysicalPosition::new(tx, ty));
+            let cx = current_x.unwrap_or(tx as f64);
+            let cy = current_y.unwrap_or(ty as f64);
+            
+            // Exponential smoothing (lerp) for Apple-like fluid drag
+            let factor = 0.15;
+            let nx = cx + (tx as f64 - cx) * factor;
+            let ny = cy + (ty as f64 - cy) * factor;
+            
+            let _ = w.set_position(PhysicalPosition::new(nx.round() as i32, ny.round() as i32));
+            
+            current_x = Some(nx);
+            current_y = Some(ny);
         }
         tick.tick().await;
     }
@@ -188,6 +203,7 @@ pub(crate) fn show_settings(app: &AppHandle) {
         let _ = w.center();
         let _ = w.show();
         let _ = w.set_focus();
+        let _ = w.emit("settings-opened", ());
     }
 }
 

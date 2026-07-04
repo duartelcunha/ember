@@ -22,9 +22,10 @@ export function Pill({ kind, text }: { kind: Kind; text: string }) {
       layoutId="refiner-surface"
       className="ember-bubble flex max-w-[280px] items-center gap-1.5 px-2.5 py-1.5"
       style={{ borderRadius: 12 }}
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 4, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.92 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
     >
       <span className="shrink-0" style={{ color }}>
         {ICON[kind]}

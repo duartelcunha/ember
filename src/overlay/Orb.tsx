@@ -16,13 +16,13 @@ export function Orb() {
     >
       <m.div
         className="ember-glow"
-        animate={{ opacity: [0.5, 1, 0.5], scale: [0.9, 1.15, 0.9] }}
-        transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
+        animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.25, 0.85] }}
+        transition={{ repeat: Infinity, duration: 2.0, ease: [0.25, 1, 0.5, 1] }}
       />
       <m.div
         className="ember-orb"
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
+        animate={{ scale: [1, 1.15, 1] }}
+        transition={{ repeat: Infinity, duration: 2.0, ease: [0.25, 1, 0.5, 1] }}
       />
     </m.div>
   );

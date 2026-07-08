@@ -400,6 +400,10 @@ export function Settings() {
   // passar ja resolvida ao aviso (que deixa de ter useEffect proprio).
   const [health, setHealth] = useState<ProviderHealth | null>(null);
   const [healthDismissed, setHealthDismissed] = useState(false);
+  // Ate o getSettings assincrono voltar, `s` sao os defaults. Mostrar os tabs ja com defaults
+  // pisca um estado falso (ex.: "sem chave" antes da chave real aterrar). Segura o conteudo ate
+  // hidratar. Fica true tambem no catch (fora do Tauri: renderiza com defaults, sem ficar preso).
+  const [hydrated, setHydrated] = useState(false);
   const refreshHealth = () =>
     ipc.getProviderHealth().then(setHealth).catch(() => {
       /* cofre ilegivel / fora do Tauri: o banner de key-store trata o caso grave */
@@ -438,7 +442,8 @@ export function Settings() {
       })
       .catch(() => {
         /* outside Tauri: use defaults */
-      });
+      })
+      .finally(() => setHydrated(true));
     refreshHealth();
   }, []);
 
@@ -511,7 +516,17 @@ export function Settings() {
               </p>
             </div>
           </header>
-  
+
+          {!hydrated ? (
+            // Esqueleto enquanto o getSettings nao voltou: evita piscar um estado falso (ex.:
+            // "sem chave" antes da chave real aterrar). So opacidade anima (compositor-only).
+            <div className="flex flex-col gap-4" aria-busy="true" aria-live="polite">
+              <span className="sr-only">Loading settings</span>
+              <div className="h-10 w-full animate-pulse rounded-lg bg-surface-1" />
+              <div className="h-32 w-full animate-pulse rounded-lg bg-surface-1" />
+              <div className="h-32 w-full animate-pulse rounded-lg bg-surface-1" />
+            </div>
+          ) : (
           <Tabs defaultValue="providers">
             <TabsList>
               <TabsTrigger value="providers">
@@ -871,6 +886,7 @@ export function Settings() {
               </div>
             </TabsContent>
           </Tabs>
+          )}
         </motion.div>
           </motion.main>
         )}

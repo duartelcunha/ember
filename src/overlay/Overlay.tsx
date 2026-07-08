@@ -2,14 +2,43 @@ import { AnimatePresence, domAnimation, LazyMotion, m, MotionConfig } from "moti
 import { useOverlayState } from "./useOverlayController";
 import { Orb } from "./Orb";
 import { Pill } from "./Pill";
+import type { OverlayState } from "./types";
+
+/** Texto anunciado a leitores de ecra por fase. O orb e as pills sao puramente visuais
+ *  (aria-hidden); sem isto, um utilizador de tecnologia de apoio nao sabia que o refine
+ *  arrancou, acabou ou falhou. `null` = nada a anunciar (fase escondida). */
+function announcement(s: OverlayState): string | null {
+  switch (s.phase) {
+    case "refining":
+      return s.message ?? "Refining your selection";
+    case "success":
+      return s.provider ? `Refined by ${s.provider}` : "Refined";
+    case "error":
+      return s.message ?? "Refine failed";
+    case "hint":
+      return s.message ?? "Select text first";
+    default:
+      return null;
+  }
+}
 
 /** Raiz do overlay junto ao cursor: orb (refining) ou pilha (success/error/hint). */
 export function Overlay() {
   const s = useOverlayState();
+  const status = announcement(s);
   return (
     <LazyMotion features={domAnimation} strict>
       <MotionConfig reducedMotion="user">
-        <div className="flex h-screen items-center justify-start p-2">
+        {/* Regiao de estado so para leitores de ecra. `assertive` para erros (o utilizador tem
+            de saber ja que nada mudou); `polite` para o resto. O orb/pills ficam aria-hidden. */}
+        <div
+          role="status"
+          aria-live={s.phase === "error" ? "assertive" : "polite"}
+          className="sr-only"
+        >
+          {status}
+        </div>
+        <div className="flex h-screen items-center justify-start p-2" aria-hidden="true">
           <AnimatePresence mode="popLayout">
             {s.phase === "refining" && (
               // Orb + legenda opcional: o nucleo emite "Trying Claude...""/"Retrying..."

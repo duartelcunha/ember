@@ -65,6 +65,12 @@
     color: var(--color-fg);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    /* Forca o canvas default do WebView2, as scrollbars nativas e os controlos de formulario
+       (spinners dos number inputs) a modo escuro. Sem isto, a janela settings (que NAO e
+       transparent) mostra o canvas BRANCO do SO por tras do body transparente: da uma
+       scrollbar clara e um flash branco durante o fade in/out do painel. A overlay/splash
+       mantem-se transparente porque `background: transparent` acima e explicito. */
+    color-scheme: dark;
   }
 
   #root {

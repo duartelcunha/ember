@@ -10,13 +10,18 @@
   --font-sans: "Geist Variable", system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 
-  /* Accent (laranja) */
-  --color-accent: #ff7a18;
-  --color-accent-hover: #ff8f3c;
-  --color-accent-active: #e8650a;
+  /* Accent (laranja), amostrado da marca-estrela: laranja vivo #fd8c3c, com um hover mais
+     quente/dourado e um active na terracota bruta do logo. O texto sobre o accent e o fundo
+     escuro do tile do logo. */
+  --color-accent: #fd8c3c;
+  --color-accent-hover: #ffa456;
+  --color-accent-active: #d9701f;
   --color-accent-fg: #1a0e03;
-  /* Accent so do orb (terracota Claude). --color-accent (Settings/Logo) fica inalterado. */
-  --color-orb-accent: #d97757;
+  /* Accent do orb/refiner, a terracota da parte "bruta" da estrela. Casa com a marca. */
+  --color-orb-accent: #e3864d;
+  /* Tons extra da marca, para o glow e a metamorfose do orb. */
+  --color-ember-glow: #ffd9a8;
+  --color-ember-raw: #b4512a;
 
   /* Superficies */
   --color-bg: #0b0a09;
@@ -69,9 +74,11 @@
    bem sobre creme. O contraste texto/fundo cumpre WCAG AA para corpo de texto.
 ---------------------------------------------------------------------------------- */
 :root[data-theme="cream"] {
-  --color-accent: #e8650a;
-  --color-accent-hover: #d15c09;
-  --color-accent-active: #b84f07;
+  /* Laranja da marca, um degrau mais escuro que no dark para contrastar sobre o creme claro
+     (o texto do botao e claro). Mesma familia do logo. */
+  --color-accent: #e0761f;
+  --color-accent-hover: #c9691a;
+  --color-accent-active: #b25a13;
   --color-accent-fg: #fff8f0;
 
   --color-bg: #f4ede1;
@@ -92,7 +99,7 @@
   --border-subtle: rgba(46, 37, 25, 0.1);
   --border-default: rgba(46, 37, 25, 0.16);
   --border-strong: rgba(46, 37, 25, 0.24);
-  --border-accent: rgba(232, 101, 10, 0.55);
+  --border-accent: rgba(217, 112, 31, 0.55);
 
   /* Vidro claro, para a bolha de preview se aparecer numa superficie clara. */
   --glass-bg: rgba(247, 242, 233, 0.7);
@@ -123,16 +130,17 @@
   height: 11px;
   border-radius: 9999px;
   background: var(--color-orb-accent);
-  box-shadow: 0 1px 8px rgba(217, 119, 87, 0.45);
+  box-shadow: 0 1px 8px rgba(227, 134, 77, 0.5);
   will-change: transform;
 }
 
-/* Glow pulsante (estado "a pensar"), por baixo do orb. Sem rotacao: so respiracao de luz. */
+/* Glow pulsante (estado "a pensar"), por baixo do orb. Sem rotacao: so respiracao de luz.
+   Tom quente da marca (laranja vivo -> transparente), a condizer com a estrela. */
 .ember-glow {
   position: absolute;
   inset: -4px;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(217, 119, 87, 0.55) 0%, rgba(217, 119, 87, 0) 70%);
+  background: radial-gradient(circle, rgba(253, 140, 60, 0.6) 0%, rgba(253, 140, 60, 0) 70%);
   filter: blur(2px);
   will-change: opacity, transform;
 }

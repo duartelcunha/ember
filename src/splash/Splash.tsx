@@ -73,7 +73,7 @@ export default function Splash() {
               className="pointer-events-none absolute h-48 w-48 rounded-full"
               style={{
                 background:
-                  "radial-gradient(circle, rgba(255,122,24,0.45) 0%, rgba(255,122,24,0) 70%)",
+                  "radial-gradient(circle, rgba(253,140,60,0.45) 0%, rgba(253,140,60,0) 70%)",
                 willChange: "transform, opacity",
               }}
               initial={glow.initial}

@@ -1,22 +1,32 @@
 import { m } from "motion/react";
+import { useOrbMotion } from "./useOrbMotion";
 
 /**
- * O "orb" de refine, agora a marca-estrela em METAMORFOSE junto ao cursor. Conta o refine em
- * movimento: a estrela roda devagar e faz cross-fade continuo entre um estado BRUTO (terracota,
- * ligeiramente menor e opaco-baixo) e um estado POLIDO (ambar com glow, maior e luminoso). Um
- * glow radial respira por baixo. Le-se claramente como "a transformar e a carregar".
+ * O "orb" de refine: metamorfose de FORMA por cross-fade entre duas silhuetas genuinamente
+ * diferentes, um blob rugoso e irregular (BRUTO) e uma estrela de 4 pontas afiada (POLIDO). Em
+ * loop, o bruto encolhe/esbate enquanto a estrela cresce/acende e vice-versa, com o glow a
+ * brilhar mais no pico polido. Le-se como algo a cristalizar do caos: o refine.
  *
- * Tudo compositor-only (opacity + transform: scale/rotate), zero layout/paint por frame, para
- * seguir o cursor aos 120fps sem engasgar. A estrela e um path SVG unico (a marca), escala
- * perfeita a qualquer tamanho. As cores vem dos tokens da marca (globals.css).
+ * NAO anima o atributo `d` (o preset `domAnimation` do overlay nao o suporta). Em vez disso,
+ * cross-fade de opacity + scale entre duas <path> sobrepostas: compositor-only, funciona com o
+ * preset leve, e a diferenca real de forma entre as duas faz a leitura de metamorfose. Reage
+ * ao movimento do rato (inclina + estica, via ember://orb-motion).
  */
 
-// Path da estrela de 4 pontas (a faisca da marca), centrada em 32,32 num viewBox 64.
-const STAR = "M32 7 C 34 26 38 30 57 32 C 38 34 34 38 32 57 C 30 38 26 34 7 32 C 26 30 30 26 32 7 Z";
+// BRUTO: blob assimetrico, pontas curtas e gastas, cantos irregulares.
+const RAW =
+  "M31 15 C 36 27 37 28 48 30 C 38 33 36 34 33 45 C 30 36 28 35 17 33 C 27 30 26 29 31 15 Z";
+// POLIDO: estrela de 4 pontas nitida e afiada, pontas longas.
+const POLISHED =
+  "M32 4 C 34 27 37 30 60 32 C 37 34 34 37 32 60 C 30 37 27 34 4 32 C 27 30 30 27 32 4 Z";
 
-const SIZE = 26;
+const SIZE = 28;
+
+// Ciclo lento e premium; bruto e polido demoram-se no seu pico, a transicao e suave.
+const CYCLE = { repeat: Infinity, duration: 3.4, ease: [0.45, 0, 0.55, 1] as const };
 
 export function Orb() {
+  const { tilt, stretchX, stretchY } = useOrbMotion();
   return (
     <m.div
       className="relative grid place-items-center"
@@ -26,50 +36,58 @@ export function Orb() {
       exit={{ opacity: 0, scale: 0.5 }}
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Glow radial que respira (quente da marca). So opacidade+escala. */}
+      {/* Glow radial, mais forte no pico polido (quando cristaliza). */}
       <m.div
         className="absolute"
         style={{
-          inset: -8,
+          inset: -9,
           borderRadius: "9999px",
           background:
-            "radial-gradient(circle, rgba(253,140,60,0.55) 0%, rgba(253,140,60,0) 70%)",
+            "radial-gradient(circle, rgba(253,140,60,0.6) 0%, rgba(253,140,60,0) 70%)",
           filter: "blur(1px)",
           willChange: "opacity, transform",
         }}
-        animate={{ opacity: [0.35, 0.9, 0.35], scale: [0.85, 1.2, 0.85] }}
-        transition={{ repeat: Infinity, duration: 2.4, ease: [0.4, 0, 0.6, 1] }}
+        animate={{ opacity: [0.28, 0.9, 0.28], scale: [0.78, 1.2, 0.78] }}
+        transition={CYCLE}
       />
 
-      {/* A estrela roda devagar; as duas camadas (bruto/polido) cross-fadeiam por baixo dela. */}
+      {/* Reacao ao cursor: inclina + estica na direcao do movimento (springs). */}
       <m.div
         className="absolute inset-0"
-        style={{ willChange: "transform" }}
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, duration: 9, ease: "linear" }}
+        style={{ rotate: tilt, scaleX: stretchX, scaleY: stretchY, willChange: "transform" }}
       >
-        {/* Estado BRUTO: terracota, mais pequeno, aparece quando o polido desaparece. */}
-        <m.svg
-          viewBox="0 0 64 64"
-          className="absolute inset-0 h-full w-full"
-          style={{ willChange: "opacity, transform" }}
-          animate={{ opacity: [1, 0.15, 1], scale: [0.82, 0.82, 0.82] }}
-          transition={{ repeat: Infinity, duration: 2.4, ease: [0.4, 0, 0.6, 1] }}
+        {/* Rotacao lenta continua, para nunca parecer estatica. */}
+        <m.div
+          className="absolute inset-0"
+          style={{ willChange: "transform" }}
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 14, ease: "linear" }}
         >
-          <path d={STAR} fill="var(--color-ember-raw)" />
-        </m.svg>
-
-        {/* Estado POLIDO: ambar luminoso, maior, em contra-fase com o bruto. Sem drop-shadow
-            animado (re-rasteriza cada frame); o brilho vem do glow radial por baixo. */}
-        <m.svg
-          viewBox="0 0 64 64"
-          className="absolute inset-0 h-full w-full"
-          style={{ willChange: "opacity, transform" }}
-          animate={{ opacity: [0.15, 1, 0.15], scale: [1, 1.06, 1] }}
-          transition={{ repeat: Infinity, duration: 2.4, ease: [0.4, 0, 0.6, 1] }}
-        >
-          <path d={STAR} fill="var(--color-ember-glow)" />
-        </m.svg>
+          {/* Cada estado numa camada <div> propria: o scale/opacity vao no div (transform-origin
+              ao centro, fiavel), nao no <path> (onde o transform-origin do SVG e traicoeiro). */}
+          {/* BRUTO: blob terracota, encolhe e esbate quando a estrela toma conta. */}
+          <m.div
+            className="absolute inset-0"
+            style={{ willChange: "opacity, transform" }}
+            animate={{ opacity: [1, 0, 1], scale: [0.9, 0.68, 0.9] }}
+            transition={CYCLE}
+          >
+            <svg viewBox="0 0 64 64" className="h-full w-full">
+              <path d={RAW} fill="var(--color-ember-raw)" />
+            </svg>
+          </m.div>
+          {/* POLIDO: estrela ambar afiada, cresce e acende em contra-fase com o bruto. */}
+          <m.div
+            className="absolute inset-0"
+            style={{ willChange: "opacity, transform" }}
+            animate={{ opacity: [0, 1, 0], scale: [0.85, 1.06, 0.85] }}
+            transition={CYCLE}
+          >
+            <svg viewBox="0 0 64 64" className="h-full w-full">
+              <path d={POLISHED} fill="var(--color-ember-glow)" />
+            </svg>
+          </m.div>
+        </m.div>
       </m.div>
     </m.div>
   );

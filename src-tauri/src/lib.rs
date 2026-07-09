@@ -193,6 +193,14 @@ async fn orb_follow_loop(app: AppHandle) {
     let mut current: Option<(f64, f64)> = None;
     let mut last = tokio::time::Instant::now();
 
+    // Reacao da estrela ao movimento: emitimos o vetor de "puxao" (cursor - estrela) para o
+    // overlay, que inclina/estica a estrela na direcao do movimento. ADAPTATIVO: numa maquina
+    // que aguenta os 120fps emitimos a cada frame; se comeca a atrasar, baixamos para 60 e depois
+    // 30fps (menos IPC), medido pelo tempo REAL de frame suavizado. So o ritmo de emissao muda;
+    // o seguimento da janela mantem-se sempre a 120fps.
+    let mut smoothed_dt = 1.0 / 120.0;
+    let mut emit_accum = 0.0f64;
+
     loop {
         if !matches!(w.is_visible(), Ok(true)) {
             break;
@@ -200,18 +208,36 @@ async fn orb_follow_loop(app: AppHandle) {
         let now = tokio::time::Instant::now();
         let dt = (now - last).as_secs_f64();
         last = now;
+        // EMA do tempo de frame: sinal de saude da maquina (dt cresce quando nao aguenta 120fps).
+        smoothed_dt = smoothed_dt * 0.9 + dt * 0.1;
         if let Some((tx, ty)) = orb_target(&app, &w) {
             let (tx, ty) = (tx as f64, ty as f64);
+            let mut pull = (0.0, 0.0);
             let (nx, ny) = match current {
                 // Primeiro frame: snap ao alvo (sem arrasto a partir do canto).
                 None => (tx, ty),
                 Some((cx, cy)) => {
+                    pull = (tx - cx, ty - cy); // quanto o cursor esta a frente da estrela agora
                     let alpha = 1.0 - (-dt / SMOOTH_TAU).exp();
                     (cx + (tx - cx) * alpha, cy + (ty - cy) * alpha)
                 }
             };
             let _ = w.set_position(PhysicalPosition::new(nx.round() as i32, ny.round() as i32));
             current = Some((nx, ny));
+
+            // Emissao adaptativa da velocidade. Periodo escolhido pela saude da maquina.
+            let emit_period = if smoothed_dt < 1.4 / 120.0 {
+                1.0 / 120.0 // aguenta bem -> 120fps
+            } else if smoothed_dt < 1.4 / 60.0 {
+                1.0 / 60.0 // a atrasar -> 60fps
+            } else {
+                1.0 / 30.0 // lenta -> 30fps
+            };
+            emit_accum += dt;
+            if emit_accum >= emit_period {
+                emit_accum = 0.0;
+                let _ = w.emit("ember://orb-motion", serde_json::json!({ "vx": pull.0, "vy": pull.1 }));
+            }
         }
         tick.tick().await;
     }

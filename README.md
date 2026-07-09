@@ -91,7 +91,7 @@ lives in `ember-core` as a pure, network-free, unit-tested function.
 
 ## Stack
 
-- **Shell:** Tauri 2 (Rust) — clipboard, input simulation, tray, windows.
+- **Shell:** Tauri 2 (Rust) - clipboard, input simulation, tray, windows.
 - **Frontend:** React 19, Vite 7, Tailwind CSS 4, Motion.
 - **Core:** the `ember-core` crate holds the refine pipeline, selection
   sequencing, provider wire-formats, and the resilience state machine, fully

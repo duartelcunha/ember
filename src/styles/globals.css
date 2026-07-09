@@ -60,6 +60,9 @@
   --glass-bg-strong: rgba(14, 13, 17, 0.92);
   --glass-blur: 20px;
 
+  /* Sombra de popovers/dropdowns (dark): duas camadas, contacto curto + difusa, suave. */
+  --shadow-pop: 0 2px 8px rgba(0, 0, 0, 0.22), 0 12px 28px rgba(0, 0, 0, 0.3);
+
   /* Canvas nativo do WebView2, scrollbars e spinners a modo escuro (tema default). Sem isto, a
      janela settings (que NAO e transparent) mostrava o canvas BRANCO do SO por tras do body
      transparente: scrollbar clara e flash branco. O tema creme sobrepoe para `light`. */
@@ -104,6 +107,10 @@
   /* Vidro claro, para a bolha de preview se aparecer numa superficie clara. */
   --glass-bg: rgba(247, 242, 233, 0.7);
   --glass-bg-strong: rgba(247, 242, 233, 0.95);
+
+  /* Sombra de popovers no creme: quente (castanho, nao preto) e mais subtil, para nao ficar
+     dura sobre o fundo claro. */
+  --shadow-pop: 0 2px 8px rgba(80, 55, 30, 0.1), 0 12px 28px rgba(80, 55, 30, 0.14);
 
   /* Canvas nativo do WebView2 claro (casa com o backgroundColor pintado no Rust). */
   color-scheme: light;
@@ -153,7 +160,13 @@
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   border: 1px solid var(--border-default);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  /* Sombra suave em camadas (contacto curto + difusa larga), em vez de uma unica sombra
+     grande e deslocada que era cortada pela borda da janela do overlay e deixava um edge duro.
+     Offsets/blur pequenos o bastante para desvanecerem dentro do padding da janela. */
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.28),
+    0 8px 20px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--color-fg);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

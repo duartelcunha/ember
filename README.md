@@ -38,7 +38,7 @@ back in place. Your clipboard is restored untouched.
 | 🛡️ **Resilient, not fragile** | A pure retry/fallback state machine handles rate-limits, truncation, content-policy, and outages. Fallbacks are pre-validated at startup, never guessed at the moment of failure. It degrades honestly instead of silently. |
 | 🔒 **BYOK, strictly local** | Your API keys live in the OS credential vault (Windows Credential Manager / macOS Keychain), never in plain text, never anywhere but the provider. |
 | 🎭 **Knows your project** | Optionally merges the `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` of your focused project into the refine, with secret-shaped lines redacted. Off by default. |
-| 💫 **Silky, deliberate UI** | Compositor-only animations tuned for 120fps, a cursor-following orb, glassmorphism, and a warm **Dark** or **Cream** theme. Respects your reduced-motion setting. |
+| 💫 **Silky, deliberate UI** | A living mark that morphs from rough to refined and leans toward your cursor as it works. Compositor-only animations tuned for 120fps, a seamless frameless window, and a warm **Dark** or **Cream** theme. Respects your reduced-motion setting. |
 
 <br>
 
@@ -66,8 +66,8 @@ compositor-only (opacity + transform, no layout thrash), tuned for a smooth
 |---|---|
 | **Install** | The ember mark blooms in with a warm radial glow, the first-run welcome. |
 | **Startup** | A quick, confident pulse of the mark each time Ember wakes. |
-| **Refine** | A terracotta orb follows your cursor, breathing while it thinks, then hands off to a glass pill with the result. |
-| **Settings** | A silk fade-and-scale in, an instant, reliable hide out, in **Dark** or **Cream**. |
+| **Refine** | The mark rides beside your cursor, morphing from a rough blob into a sharp star as it works and leaning into your movement, then hands off to a glass pill with the result. |
+| **Settings** | A frameless, seamless window that fades and scales in and hides on an instant, in **Dark** or **Cream**. |
 | **Quit** | The mark dims and tilts away; the app exits exactly when the animation lands. |
 
 <br>

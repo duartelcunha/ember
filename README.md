@@ -10,10 +10,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/duartelcunha/Ember/releases/latest"><img src="https://img.shields.io/github/v/release/duartelcunha/Ember?style=flat-square&color=ff7a18&label=release" alt="Latest release"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20·%20macOS-2e2519?style=flat-square" alt="Platform">
-  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffcb47?style=flat-square" alt="Tauri 2"></a>
-  <img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-4da3ff?style=flat-square" alt="License">
+  <a href="https://github.com/duartelcunha/Ember/releases"><img src="https://img.shields.io/badge/release-v0.3.0-ff7a18?style=for-the-badge&labelColor=1a0e03" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Windows%20·%20macOS-2e2519?style=for-the-badge&logo=windows&logoColor=ffffff" alt="Platform">
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri%202-24C8DB?style=for-the-badge&logo=tauri&logoColor=ffffff" alt="Tauri 2"></a>
+  <img src="https://img.shields.io/badge/Rust-CE422B?style=for-the-badge&logo=rust&logoColor=ffffff" alt="Rust">
+  <img src="https://img.shields.io/badge/React%2019-149ECA?style=for-the-badge&logo=react&logoColor=ffffff" alt="React 19">
+  <img src="https://img.shields.io/badge/MIT%20%2F%20Apache--2.0-4da3ff?style=for-the-badge&labelColor=0d1b2a" alt="License">
 </p>
 
 ---
@@ -51,6 +53,22 @@ back in place. Your clipboard is restored untouched.
 > **Terminals are handled.** In Windows Terminal, PowerShell, and friends, Ember
 > uses `Ctrl+Shift+C/V`, replaces the current input line instead of appending, and
 > flattens the result to a single line so a stray newline never submits your command.
+
+<br>
+
+## Moments
+
+Ember animates the moments that matter, and only those. Every animation is
+compositor-only (opacity + transform, no layout thrash), tuned for a smooth
+120fps, and honors your OS reduced-motion setting.
+
+| Moment | What you see |
+|---|---|
+| **Install** | The ember mark blooms in with a warm radial glow, the first-run welcome. |
+| **Startup** | A quick, confident pulse of the mark each time Ember wakes. |
+| **Refine** | A terracotta orb follows your cursor, breathing while it thinks, then hands off to a glass pill with the result. |
+| **Settings** | A silk fade-and-scale in, an instant, reliable hide out, in **Dark** or **Cream**. |
+| **Quit** | The mark dims and tilts away; the app exits exactly when the animation lands. |
 
 <br>
 

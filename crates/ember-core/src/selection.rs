@@ -121,6 +121,27 @@ pub fn restore(io: &mut impl SelectionIo, saved: &Option<String>) {
     }
 }
 
+/// Achata o refinado para uma unica linha, para colar num TERMINAL. Num terminal um `\n` no meio
+/// do texto SUBMETE o comando: cada newline executaria uma linha parcial. Colapsa qualquer
+/// corrida de espacos/newlines (incl. `\r\n`) num unico espaco e apara as pontas, para o prompt
+/// receber uma so linha continua. Pura e testavel; so aplicada quando o alvo e um terminal.
+pub fn flatten_for_terminal(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut prev_ws = false;
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            if !prev_ws {
+                out.push(' ');
+                prev_ws = true;
+            }
+        } else {
+            out.push(ch);
+            prev_ws = false;
+        }
+    }
+    out.trim().to_string()
+}
+
 /// Clampa a posicao (x,y) de uma janela wxh a uma area de trabalho, para o orb
 /// nunca sair do ecra.
 pub fn clamp_pos(
@@ -320,6 +341,23 @@ mod tests {
         let ok = replace(&mut io, "REFINED", &Some("old".into()), 1);
         assert!(!ok);
         assert_eq!(io.pasted, None);
+    }
+
+    #[test]
+    fn flatten_for_terminal_collapses_newlines_and_runs_of_whitespace() {
+        // Newlines viram espaco unico (senao submetiam o comando linha a linha no terminal).
+        assert_eq!(
+            flatten_for_terminal("linha um\nlinha dois"),
+            "linha um linha dois"
+        );
+        // \r\n, tabs e corridas de espacos colapsam num so espaco.
+        assert_eq!(
+            flatten_for_terminal("a\r\n\r\n  b\t\tc"),
+            "a b c"
+        );
+        // Pontas aparadas; uma linha simples fica intacta.
+        assert_eq!(flatten_for_terminal("  ja e uma linha  "), "ja e uma linha");
+        assert_eq!(flatten_for_terminal("sem quebras"), "sem quebras");
     }
 
     #[test]

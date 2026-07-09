@@ -87,7 +87,14 @@ fn blocking_replace(
     settle_ms: u64,
 ) -> Result<bool, String> {
     let mut io = RealIo::new(terminal)?;
-    let armed = seq::replace(&mut io, &refined, &saved, settle_ms);
+    // No terminal, achata para uma linha: um `\n` no meio submetia o comando a meio (cada linha
+    // executaria em separado). Fora do terminal, o texto original (com paragrafos) e preservado.
+    let to_paste = if terminal {
+        seq::flatten_for_terminal(&refined)
+    } else {
+        refined
+    };
+    let armed = seq::replace(&mut io, &to_paste, &saved, settle_ms);
     if saved.is_none() {
         if let Some(img) = &image {
             io.restore_image(img);

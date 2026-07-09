@@ -3,12 +3,17 @@
 
 use ember_core::selection::SelectionIo;
 use enigo::{
-    Direction::{Click, Press, Release},
+    Direction::{Press, Release},
     Enigo, Key, Keyboard, Settings,
 };
 
 /// Sentinela unico escrito no clipboard para detetar "nada selecionado".
 pub const SENTINEL: &str = "\u{200b}__ember_capture_sentinel__\u{200b}";
+
+/// Pausa entre eventos de tecla dentro de um atalho simulado (ver `RealIo::combo`). Curta o
+/// bastante para ser impercetivel, longa o bastante para apps de input assincrono (Windows
+/// Terminal) registarem os modificadores antes da tecla.
+const KEY_SETTLE_MS: u64 = 12;
 
 /// Snapshot de um clipboard de imagem (RGBA), para restaurar depois do refine. Sem isto, um
 /// ciclo de captura destruia a imagem no clipboard (a captura e text-only) e nunca a repunha.
@@ -28,6 +33,23 @@ fn clipboard_modifier() -> Key {
 #[cfg(not(target_os = "macos"))]
 fn clipboard_modifier() -> Key {
     Key::Control
+}
+
+/// A tecla C/V de um atalho de clipboard, por plataforma. No Windows usa o VIRTUAL KEY fisico
+/// (`Key::Other(VK)`): VK_C=0x43, VK_V=0x56. Um `Key::Unicode` injetaria um caractere puro que o
+/// Windows Terminal nao liga aos modificadores (o atalho de copia nao dispara). Nas outras
+/// plataformas o Unicode funciona com Cmd/Ctrl.
+#[cfg(windows)]
+fn clip_key(c: char) -> Key {
+    match c {
+        'c' | 'C' => Key::Other(0x43),
+        'v' | 'V' => Key::Other(0x56),
+        other => Key::Unicode(other),
+    }
+}
+#[cfg(not(windows))]
+fn clip_key(c: char) -> Key {
+    Key::Unicode(c)
 }
 
 pub struct RealIo {
@@ -78,17 +100,51 @@ impl RealIo {
 
     /// Simula um atalho de clipboard: <modificador>(+Shift)+`key`. O modificador e Cmd no macOS,
     /// Ctrl no resto. O Shift so entra no modo terminal (so no Windows).
+    ///
+    /// A tecla (C/V) e enviada como VIRTUAL KEY FISICO (`clip_key`), nao como `Key::Unicode`. O
+    /// enigo, com Unicode, cai num evento KEYEVENTF_UNICODE (caractere puro, VK=0) que o Windows
+    /// Terminal NAO associa aos modificadores: um Ctrl+Shift+<char c> injetado nao dispara o
+    /// atalho de copia (o copy manual funciona, o sintetico nao). Com o VK fisico (VK_C=0x43), o
+    /// SendInput gera uma tecla real com scancode, que o terminal reconhece como Ctrl+Shift+C.
+    ///
+    /// Pausas curtas (`KEY_SETTLE_MS`) entre premir os modificadores, a tecla e soltar: apps de
+    /// input assincrono podiam receber a tecla antes de registarem os modificadores.
     fn combo(&mut self, key: char) {
         let modifier = clipboard_modifier();
+        let k = clip_key(key);
         let _ = self.enigo.key(modifier, Press);
         if self.terminal {
             let _ = self.enigo.key(Key::Shift, Press);
         }
-        let _ = self.enigo.key(Key::Unicode(key), Click);
+        self.settle();
+        let _ = self.enigo.key(k, Press);
+        self.settle();
+        let _ = self.enigo.key(k, Release);
+        self.settle();
         if self.terminal {
             let _ = self.enigo.key(Key::Shift, Release);
         }
         let _ = self.enigo.key(modifier, Release);
+    }
+
+    /// Pequena pausa para o input assentar entre eventos de tecla (ver `combo`).
+    fn settle(&mut self) {
+        std::thread::sleep(std::time::Duration::from_millis(KEY_SETTLE_MS));
+    }
+
+    /// Seleciona a linha de input atual: End (vai ao fim) e Shift+Home (seleciona ate ao inicio).
+    /// O paste que se segue substitui essa seleccao editavel. So usado no modo terminal.
+    fn select_input_line(&mut self) {
+        let _ = self.enigo.key(Key::End, Press);
+        let _ = self.enigo.key(Key::End, Release);
+        self.settle();
+        let _ = self.enigo.key(Key::Shift, Press);
+        self.settle();
+        let _ = self.enigo.key(Key::Home, Press);
+        let _ = self.enigo.key(Key::Home, Release);
+        self.settle();
+        let _ = self.enigo.key(Key::Shift, Release);
+        self.settle();
     }
 }
 
@@ -154,6 +210,13 @@ impl SelectionIo for RealIo {
         self.combo('c');
     }
     fn send_paste(&mut self) {
+        // No terminal, a "seleccao" de rato nao e editavel (so serve para copiar): um paste
+        // simples inseria o refinado A SEGUIR ao texto original em vez de o substituir. Antes de
+        // colar, selecionamos a LINHA DE INPUT atual (End -> Shift+Home) para o paste a
+        // substituir. Funciona no caso tipico: refinar o que se esta a escrever no prompt.
+        if self.terminal {
+            self.select_input_line();
+        }
         self.combo('v');
     }
     fn sleep_ms(&mut self, ms: u64) {

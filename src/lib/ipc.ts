@@ -4,6 +4,7 @@ export type ProviderKind = "gemini" | "openai" | "claude";
 export type ProfileSource = "claude_md" | "user_edited" | "default";
 export type RefineMode = "adaptive" | "polish" | "turbo";
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
+export type Theme = "dark" | "cream";
 /** Resultado do probe de chave: distingue "chave recusada" de "sem rede agora". */
 export type KeyCheck = "valid" | "invalid" | "network_error";
 
@@ -42,6 +43,7 @@ export interface EmberSettings {
   pasteSettleMs: number;
   debugMode: boolean;
   projectContext: boolean;
+  theme: Theme;
 }
 
 export const DEFAULT_SETTINGS: EmberSettings = {
@@ -67,6 +69,7 @@ export const DEFAULT_SETTINGS: EmberSettings = {
   pasteSettleMs: 90,
   debugMode: false,
   projectContext: false,
+  theme: "dark",
 };
 
 /** Comandos Tauri das settings. Implementados no nucleo Rust. */
@@ -84,6 +87,7 @@ export const ipc = {
   setHotkey: (hotkey: string) => invoke<void>("set_hotkey", { hotkey }),
   setAutostart: (enabled: boolean) => invoke<void>("set_autostart", { enabled }),
   setMode: (mode: RefineMode) => invoke<void>("set_mode", { mode }),
+  setTheme: (theme: Theme) => invoke<void>("set_theme", { theme }),
   setThinking: (enabled: boolean, level: ThinkingLevel) =>
     invoke<void>("set_thinking", { enabled, level }),
   setTerminalHandling: (enabled: boolean) => invoke<void>("set_terminal_handling", { enabled }),
@@ -96,5 +100,6 @@ export const ipc = {
   setDebugMode: (enabled: boolean) => invoke<void>("set_debug_mode", { enabled }),
   readRecentLogs: (lines: number) => invoke<string>("read_recent_logs", { lines }),
   revealLogDir: () => invoke<void>("reveal_log_dir"),
+  openRepo: () => invoke<void>("open_repo"),
   getDiagnostics: () => invoke<string>("get_diagnostics"),
 };

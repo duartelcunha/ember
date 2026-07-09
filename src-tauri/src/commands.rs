@@ -41,6 +41,7 @@ pub struct SettingsDto {
     paste_settle_ms: u64,
     debug_mode: bool,
     project_context: bool,
+    theme: String,
 }
 
 fn source_str(s: ProfileSource) -> &'static str {
@@ -108,6 +109,7 @@ fn build_dto(app: &AppHandle, cfg: &config::Config) -> SettingsDto {
         paste_settle_ms: cfg.paste_settle_ms,
         debug_mode: cfg.debug_mode,
         project_context: cfg.project_context,
+        theme: cfg.theme.clone(),
     }
 }
 
@@ -207,6 +209,20 @@ pub fn set_mode(app: AppHandle, mode: String) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.mode = parse_mode(&mode)?;
     config::save(&app, &cfg).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_theme(app: AppHandle, theme: String) -> Result<(), String> {
+    if theme != "dark" && theme != "cream" {
+        return Err(format!("invalid theme: {theme}"));
+    }
+    let mut cfg = config::load(&app);
+    cfg.theme = theme;
+    config::save(&app, &cfg).map_err(|e| e.to_string())?;
+    // Pinta o canvas nativo da janela ja com a cor do tema: a proxima abertura nao pisca a cor
+    // antiga antes de o CSS aplicar (o CSS so corre depois do webview carregar).
+    crate::apply_window_theme(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -393,6 +409,24 @@ pub fn set_debug_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
 #[tauri::command]
 pub fn read_recent_logs(app: AppHandle, lines: usize) -> String {
     crate::logging::read_recent(&app, lines.clamp(1, 5000))
+}
+
+/// URL do repositorio do projeto (fixo, sem input do utilizador). Fonte unica para o link
+/// discreto no About e para nao espalhar a string.
+const REPO_URL: &str = "https://github.com/duartelcunha/ember";
+
+/// Abre o repositorio no browser do SO. URL fixo (constante), por isso seguro para o `start`.
+#[tauri::command]
+pub fn open_repo() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "start", "", REPO_URL])
+        .spawn();
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(REPO_URL).spawn();
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let result = std::process::Command::new("xdg-open").arg(REPO_URL).spawn();
+    result.map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// Abre a pasta de logs no explorador de ficheiros do SO.

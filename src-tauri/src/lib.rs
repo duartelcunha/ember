@@ -17,6 +17,7 @@ use std::sync::atomic::Ordering;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
+use tauri::window::Color;
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow, WebviewWindowBuilder, Emitter};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -50,10 +51,26 @@ fn get_or_create_window(app: &AppHandle, label: &str) -> Option<WebviewWindow> {
         .iter()
         .find(|w| w.label == label)
         .cloned()?;
-    WebviewWindowBuilder::from_config(app, &cfg)
-        .ok()?
-        .build()
-        .ok()
+    let w = WebviewWindowBuilder::from_config(app, &cfg).ok()?.build().ok()?;
+    // Fecho da janela settings tratado NATIVAMENTE: o X (ou Alt+F4) esconde a janela em vez de
+    // a destruir, para a app continuar na tray. Feito aqui no Rust, nao no JS: o onCloseRequested
+    // do lado do webview e fragil (depende do webview estar vivo e responsivo, e deixava a janela
+    // presa a preto quando falhava). O evento nativo nunca falha.
+    if label == "settings" {
+        // Pinta o fundo nativo com a cor do tema guardado ANTES da 1a exibicao: se o tema for
+        // creme, a janela nao pisca o escuro do backgroundColor default antes de o CSS aplicar.
+        let theme = config::load(app).theme;
+        let _ = w.set_background_color(Some(theme_bg(&theme)));
+
+        let win = w.clone();
+        w.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = win.hide();
+            }
+        });
+    }
+    Some(w)
 }
 
 /// Geometria do monitor atual da janela (para clampar o orb ao ecra).
@@ -206,12 +223,37 @@ pub(crate) fn hide_orb(app: &AppHandle) {
     }
 }
 
+/// Cor de fundo nativa da janela por tema (RGBA opaco). Casa com `--color-panel` do CSS de cada
+/// tema, para o canvas do WebView2 estar ja da cor certa no frame zero (sem flash antes do CSS).
+fn theme_bg(theme: &str) -> Color {
+    match theme {
+        "cream" => Color(247, 242, 233, 255), // #f7f2e9
+        _ => Color(17, 16, 20, 255),          // #111014 (dark, default)
+    }
+}
+
+/// Pinta o fundo nativo da janela settings com a cor do tema guardado. Chamado na criacao da
+/// janela e sempre que o tema muda (set_theme), para nenhuma abertura piscar a cor do outro tema.
+pub(crate) fn apply_window_theme(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        let theme = config::load(app).theme;
+        let _ = w.set_background_color(Some(theme_bg(&theme)));
+    }
+}
+
 pub(crate) fn show_settings(app: &AppHandle) {
+    // A janela ja existia? So nas REABERTURAS emitimos settings-opened (para o React re-animar
+    // o fade-in via remount). Na 1a criacao NAO emitimos: o React acabou de montar e ja anima a
+    // entrada sozinho; um emit aqui fazia um segundo remount (o conteudo aparecia, desaparecia e
+    // voltava). O emit tambem chegaria antes de o webview ter listener, portanto seria inutil.
+    let existed = app.get_webview_window("settings").is_some();
     if let Some(w) = get_or_create_window(app, "settings") {
         let _ = w.center();
         let _ = w.show();
         let _ = w.set_focus();
-        let _ = w.emit("settings-opened", ());
+        if existed {
+            let _ = w.emit("settings-opened", ());
+        }
         // Se o modo debug estiver ligado, abre ja as devtools ao abrir as settings.
         if config::load(app).debug_mode {
             w.open_devtools();
@@ -393,6 +435,7 @@ pub fn run() {
             commands::set_hotkey,
             commands::set_autostart,
             commands::set_mode,
+            commands::set_theme,
             commands::set_thinking,
             commands::set_terminal_handling,
             commands::set_project_context,
@@ -409,6 +452,7 @@ pub fn run() {
             commands::set_debug_mode,
             commands::read_recent_logs,
             commands::reveal_log_dir,
+            commands::open_repo,
             commands::get_diagnostics,
         ])
         .setup(|app| {

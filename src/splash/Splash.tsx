@@ -30,17 +30,17 @@ const ICON: Record<Mode, IconAnim> = {
   install: {
     initial: { opacity: 0, scale: 0.6 },
     animate: { opacity: [0, 1, 1, 0], scale: [0.6, 1.08, 1, 0.96] },
-    transition: { duration: 1.7, times: [0, 0.28, 0.72, 1], ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 2.2, times: [0, 0.28, 0.72, 1], ease: [0.22, 1, 0.36, 1] },
   },
   startup: {
     initial: { opacity: 0, scale: 0.9 },
     animate: { opacity: [0, 1, 1, 0], scale: [0.9, 1.03, 1, 0.98] },
-    transition: { duration: 0.95, times: [0, 0.3, 0.7, 1], ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 1.35, times: [0, 0.3, 0.7, 1], ease: [0.22, 1, 0.36, 1] },
   },
   quit: {
     initial: { opacity: 1, scale: 1 },
     animate: { opacity: [1, 1, 0], scale: [1, 1.06, 0.82], rotate: [0, 0, -8] },
-    transition: { duration: 0.5, times: [0, 0.35, 1], ease: [0.4, 0, 1, 1] },
+    transition: { duration: 0.7, times: [0, 0.35, 1], ease: [0.4, 0, 1, 1] },
   },
 };
 

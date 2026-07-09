@@ -27,7 +27,7 @@ export const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:text-fg focus-visible:outline-none data-[state=active]:bg-surface-3 data-[state=active]:text-fg",
+      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors duration-300 ease-out hover:text-fg focus-visible:outline-none data-[state=active]:bg-surface-3 data-[state=active]:text-fg",
       className,
     )}
     {...props}
@@ -45,9 +45,9 @@ export const TabsContent = React.forwardRef<
     {...props}
   >
     <motion.div
-      initial={{ opacity: 0, y: 4 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>

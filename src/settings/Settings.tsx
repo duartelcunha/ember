@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence, MotionConfig } from "motion/react";
+import { motion, MotionConfig } from "motion/react";
 import { toast } from "sonner";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import {
   GearSix,
+  GithubLogo,
   Keyboard,
   Plugs,
   Sliders,
@@ -27,6 +27,7 @@ import {
   type ProviderHealth,
   type ProviderKind,
   type RefineMode,
+  type Theme,
   type ThinkingLevel,
 } from "@/lib/ipc";
 
@@ -34,6 +35,12 @@ const GEMINI_PRESETS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
 const CLAUDE_PRESETS = ["claude-haiku-4-5", "claude-sonnet-4-6"];
 const OPENAI_PRESETS = ["deepseek/deepseek-r1:free", "qwen/qwen3-coder:free"];
 const CUSTOM = "__custom__";
+
+/** Aplica o tema no <html> via data-theme. O CSS (globals.css) faz o resto: dark e o default
+ *  (sem atributo ou "dark"); "cream" liga o bloco :root[data-theme="cream"]. */
+function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+}
 
 function Section({
   title,
@@ -388,7 +395,11 @@ function DiagnosticsSection({ debugMode }: { debugMode: boolean }) {
 }
 
 export function Settings() {
-  const [isVisible, setIsVisible] = useState(true);
+  // A janela e pintada escura pelo Rust (backgroundColor) e mostrada quando o componente monta,
+  // por isso o fade-in de entrada corre no mount e ja se ve. As reaberturas re-animam via
+  // `openKey` (remount do conteudo). O fecho esconde a janela no lado nativo (ver useEffect),
+  // sem fade-out (fragil numa janela nativa), por isso nao ha estado de "invisivel" no JS.
+  const [openKey, setOpenKey] = useState(0);
   const [s, setS] = useState<EmberSettings>(DEFAULT_SETTINGS);
   const [profileText, setProfileText] = useState("");
   const [hotkey, setHotkey] = useState(DEFAULT_SETTINGS.hotkey);
@@ -410,21 +421,18 @@ export function Settings() {
     });
 
   useEffect(() => {
-    // Fecho com fade: previne o fecho nativo e corre a saida. A janela so esconde quando a
-    // animacao ACABA (AnimatePresence onExitComplete, abaixo), sem um setTimeout acoplado a
-    // mao ao duration que corriam em corrida um com o outro.
-    const unlistenClose = getCurrentWindow().onCloseRequested((event) => {
-      event.preventDefault();
-      setIsVisible(false);
-    });
-
-    // Listen for settings-opened to trigger the fade-in
+    // O fecho (X / Alt+F4) e tratado NATIVAMENTE no Rust (get_or_create_window): esconde a
+    // janela, a app fica na tray. Nao ha handler de fecho no JS de proposito, o do webview era
+    // fragil e deixava a janela presa a preto quando falhava.
+    //
+    // Reaberturas: a janela ja existe (so escondida), o Rust re-emite settings-opened. Incrementa
+    // a openKey: a key nova remonta o conteudo, por isso o fade-in de entrada volta a correr do
+    // zero a cada reabertura.
     const unlistenOpen = listen("settings-opened", () => {
-      setIsVisible(true);
+      setOpenKey((k) => k + 1);
     });
 
     return () => {
-      unlistenClose.then((f) => f());
       unlistenOpen.then((f) => f());
     };
   }, []);
@@ -439,6 +447,7 @@ export function Settings() {
         setPolls(res.capturePolls);
         setStepMs(res.captureStepMs);
         setSettleMs(res.pasteSettleMs);
+        applyTheme(res.theme);
       })
       .catch(() => {
         /* outside Tauri: use defaults */
@@ -463,6 +472,17 @@ export function Settings() {
         setS((cur) => ({ ...cur, mode: prev })); // reverte o otimismo se o backend falhou
         toast.error("Couldn't update the mode.");
       });
+  };
+
+  const setTheme = (theme: Theme) => {
+    const prev = s.theme;
+    setS({ ...s, theme });
+    applyTheme(theme); // aplica ja (otimista); o data-theme troca as cores na hora
+    ipc.setTheme(theme).catch(() => {
+      setS((cur) => ({ ...cur, theme: prev }));
+      applyTheme(prev);
+      toast.error("Couldn't change the theme.");
+    });
   };
 
   const setThinking = (enabled: boolean, level: ThinkingLevel) => {
@@ -491,21 +511,23 @@ export function Settings() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <AnimatePresence onExitComplete={() => getCurrentWindow().hide().catch(() => {})}>
-        {isVisible && (
+          {/* Sem AnimatePresence/exit de proposito: a `key` (openKey) troca o conteudo num so
+              commit (o antigo desmonta, o novo monta) e o novo corre initial->animate = fade-in
+              limpo. Um exit-then-enter fazia o conteudo antigo SAIR primeiro (desaparecer) antes
+              de o novo entrar, o "mostra, some, mostra" da reabertura. O fecho ja e nativo (Rust). */}
           <motion.main
+            key={openKey}
             className="min-h-screen bg-panel text-fg"
-            initial={{ opacity: 0, scale: 0.985 }}
+            initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.985 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             style={{ transformOrigin: "center" }}
           >
         <motion.div
           className="mx-auto max-w-3xl px-8 py-12"
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
+          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
         >
           <header className="mb-10 flex items-center gap-3">
             <Logo size={34} />
@@ -711,11 +733,11 @@ export function Settings() {
                   {/* Reveal via grid-template-rows 0fr->1fr (sem reflow de irmaos, mais suave
                       que animar height:auto pelo JS). O interior faz min-h-0 + overflow-hidden. */}
                   <div
-                    className="grid transition-[grid-template-rows] duration-200 ease-out"
+                    className="grid transition-[grid-template-rows] duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                     style={{ gridTemplateRows: showAdvanced ? "1fr" : "0fr" }}
                   >
                     <div
-                      className={`min-h-0 overflow-hidden transition-opacity duration-200 ${
+                      className={`min-h-0 overflow-hidden transition-opacity duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                         showAdvanced ? "opacity-100" : "opacity-0"
                       }`}
                     >
@@ -860,13 +882,19 @@ export function Settings() {
   
             <TabsContent value="appearance">
               <Section
-                title="Appearance"
-                hint="Premium dark theme. Respects the system's reduced-motion setting."
+                title="Theme"
+                titleId="theme-heading"
+                hint="Applies to this Settings window. The cursor overlay keeps its glass look on any background. Respects the system's reduced-motion setting."
               >
-                <p className="text-sm text-fg-muted">
-                  Ember uses a dark, glassy theme with orange as the accent. More theme options coming
-                  later.
-                </p>
+                <Select value={s.theme} onValueChange={(v) => setTheme(v as Theme)}>
+                  <SelectTrigger aria-labelledby="theme-heading">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dark">Dark (glassy, orange accent)</SelectItem>
+                    <SelectItem value="cream">Cream (warm light)</SelectItem>
+                  </SelectContent>
+                </Select>
               </Section>
             </TabsContent>
   
@@ -878,6 +906,16 @@ export function Settings() {
                     OpenAI-compatible fallback (OpenRouter by default) and Claude as an optional
                     third family, guided by your profile. Built with Tauri.
                   </p>
+                  <button
+                    onClick={() =>
+                      ipc.openRepo().catch(() => toast.error("Couldn't open the repository."))
+                    }
+                    className="inline-flex w-fit items-center gap-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
+                    aria-label="Open the Ember source repository on GitHub"
+                  >
+                    <GithubLogo size={15} weight="fill" />
+                    Source on GitHub
+                  </button>
                 </Section>
                 <Section title="Updates" hint="Checks against the latest GitHub release, signed and verified.">
                   <UpdateChecker />
@@ -889,8 +927,6 @@ export function Settings() {
           )}
         </motion.div>
           </motion.main>
-        )}
-      </AnimatePresence>
     </MotionConfig>
   );
 }

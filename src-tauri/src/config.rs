@@ -44,6 +44,9 @@ pub struct Config {
     /// ao perfil global. Default OFF (privacidade: um repo de cliente nao deve ir para o LLM sem
     /// o utilizador ligar isto). So-leitura de ficheiros de contexto conhecidos, com redacao.
     pub project_context: bool,
+    /// Tema visual da janela de Settings: "dark" (default) ou "cream". So afeta as Settings; a
+    /// overlay/splash mantem a identidade dark de marca.
+    pub theme: String,
 }
 
 /// Limites do timing de captura. Fonte unica: `commands::set_capture_timing` e a
@@ -72,6 +75,7 @@ impl Default for Config {
             paste_settle_ms: 90,
             debug_mode: false,
             project_context: false,
+            theme: "dark".to_string(),
         }
     }
 }
@@ -105,6 +109,9 @@ impl Config {
         }
         if self.thinking_level.trim().is_empty() {
             self.thinking_level = d.thinking_level;
+        }
+        if self.theme != "dark" && self.theme != "cream" {
+            self.theme = d.theme;
         }
         self.capture_polls = self.capture_polls.clamp(CAPTURE_POLLS.0, CAPTURE_POLLS.1);
         self.capture_step_ms = self

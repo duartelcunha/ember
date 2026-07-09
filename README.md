@@ -1,78 +1,120 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="Ember Logo">
+  <img src="src-tauri/icons/128x128@2x.png" width="112" height="112" alt="Ember">
 </p>
 
 <h1 align="center">Ember</h1>
 
 <p align="center">
-  <strong>The in-the-moment prompt refiner for any app.</strong><br>
-  <em>Select text anywhere, press a shortcut, and watch it refine in place.</em>
+  <strong>Refine any prompt, in the moment, in any app.</strong><br>
+  <em>Select text. Press a shortcut. Watch it sharpen in place.</em>
 </p>
 
 <p align="center">
-  <a href="https://github.com/duartelcunha/ember/releases/latest"><img src="https://img.shields.io/github/v/release/duartelcunha/ember?style=flat-square&color=orange" alt="Latest Release"></a>
-  <a href="https://github.com/duartelcunha/ember/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Built%20with-Tauri%202-yellow.svg?style=flat-square" alt="Tauri"></a>
+  <a href="https://github.com/duartelcunha/Ember/releases/latest"><img src="https://img.shields.io/github/v/release/duartelcunha/Ember?style=flat-square&color=ff7a18&label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20·%20macOS-2e2519?style=flat-square" alt="Platform">
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffcb47?style=flat-square" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-4da3ff?style=flat-square" alt="License"></a>
 </p>
 
 ---
 
-Ember is a completely frictionless, native AI writing assistant that lives in your system tray. Select text anywhere, press the global shortcut, and Ember refines the selection in place. A beautiful UI element loads next to your cursor, the text is rewritten by a state-of-the-art LLM, and your selection is magically replaced. 
+Ember lives in your system tray and gets out of the way. Highlight text in **any**
+app, hit the global shortcut, and a small orb appears by your cursor while a
+state-of-the-art model rewrites your selection. The refined text drops straight
+back in place. Your clipboard is restored untouched.
 
-**No window switching. No copy-paste dance. Just magic.**
+**No window switching. No copy-paste dance. No tab you forgot to close.**
 
-## ✨ Features
+<br>
 
-- ⚡ **Auto refine in place:** A global hotkey captures your selection, refines it, and pastes the result directly over the original text. Your original clipboard is restored automatically!
-- 🛡️ **Resilient by design:** Primary provider is Google's Gemini, with Anthropic's Claude as an intelligent fallback. Fully handles rate-limits, context windows, and transient errors.
-- 🔒 **BYOK (Bring Your Own Key):** Your API keys are strictly local. They live heavily encrypted in the Windows Credential Manager and are never sent anywhere but the provider. Privacy first!
-- 🎭 **Custom Profiles:** Auto-detects contexts from `CLAUDE.md` or edit the system prompts directly in the beautiful settings panel.
-- 💫 **Silky Smooth UI:** Micro-animations, dynamic glassmorphism, and a slick orb that elegantly follows your cursor.
+## Why Ember
 
-## 🚀 Quick Start
+|  |  |
+|---|---|
+| ⚡ **Refine in place** | A global hotkey captures your selection, refines it, and pastes the result over the original, then quietly restores your clipboard. Works in editors, browsers, chat apps, and terminals. |
+| 🆓 **Free by default** | Runs on Google **Gemini** (generous free tier) as primary, with an **OpenAI-compatible** fallback defaulting to **OpenRouter** and a free reasoning model (DeepSeek R1). Point it at DeepSeek, Groq, or a local Ollama with one field. |
+| 🛡️ **Resilient, not fragile** | A pure retry/fallback state machine handles rate-limits, truncation, content-policy, and outages. Fallbacks are pre-validated at startup, never guessed at the moment of failure. It degrades honestly instead of silently. |
+| 🔒 **BYOK, strictly local** | Your API keys live in the OS credential vault (Windows Credential Manager / macOS Keychain), never in plain text, never anywhere but the provider. |
+| 🎭 **Knows your project** | Optionally merges the `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` of your focused project into the refine, with secret-shaped lines redacted. Off by default. |
+| 💫 **Silky, deliberate UI** | Compositor-only animations tuned for 120fps, a cursor-following orb, glassmorphism, and a warm **Dark** or **Cream** theme. Respects your reduced-motion setting. |
 
-1. Head over to the [Releases](https://github.com/duartelcunha/ember/releases/latest) page and download the latest `.exe` installer.
-2. Launch Ember (it will live quietly in your system tray).
-3. Click the Tray Icon and open **Settings** to add your Gemini or Claude API key.
-4. Select any text in any app, and press `Ctrl+Shift+Space`.
-5. Watch the magic happen!
+<br>
 
-## 🛠️ Stack
+## Quick start
 
-Built for maximum performance, minimal footprint, and stunning UI:
-- **Core:** Tauri 2 (Rust shell)
-- **Frontend:** React 19, Vite, Tailwind CSS 4, Framer Motion
-- **Architecture:** The pure logic (refine pipeline, selection sequencing) lives in the `ember-core` crate and is fully unit-tested.
+1. Grab the latest installer from the [**Releases**](https://github.com/duartelcunha/Ember/releases/latest) page.
+2. Launch Ember. It settles into your system tray.
+3. Open **Settings** from the tray and paste a free [OpenRouter](https://openrouter.ai/keys) or [Gemini](https://aistudio.google.com/apikey) key.
+4. Select text in any app and press `Ctrl+Shift+Space`.
+5. Watch it refine.
 
-## 👨‍💻 Development
+> **Terminals are handled.** In Windows Terminal, PowerShell, and friends, Ember
+> uses `Ctrl+Shift+C/V`, replaces the current input line instead of appending, and
+> flattens the result to a single line so a stray newline never submits your command.
 
-Want to build it from source or contribute?
+<br>
 
-```bash
-# Install dependencies
-npm install
+## The refine chain
 
-# Run locally in dev mode
-npm run tauri dev
+Ember tries providers in priority order, keeping only the ones you've configured:
+
+```
+Gemini  →  OpenAI-compatible (OpenRouter)  →  Claude
+primary        default fallback              optional third family
 ```
 
-The app runs in the system tray. Default shortcut: `Ctrl+Shift+Space`. Open Settings from the tray to tweak everything!
+Transient errors retry with backoff on the same provider; only on exhaustion does
+it fall to the next family. Auth and truncation fall over immediately (the other
+family has a different key and different limits). Non-transient errors (a bad
+payload, a content-policy refusal) propagate without masking. Every branch of this
+lives in `ember-core` as a pure, network-free, unit-tested function.
 
-## 🧪 Testing
+<br>
+
+## Stack
+
+- **Shell:** Tauri 2 (Rust) — clipboard, input simulation, tray, windows.
+- **Frontend:** React 19, Vite 7, Tailwind CSS 4, Motion.
+- **Core:** the `ember-core` crate holds the refine pipeline, selection
+  sequencing, provider wire-formats, and the resilience state machine, fully
+  unit-tested with no I/O.
+
+The split is deliberate: everything that can be reasoned about is pure and tested;
+the shell is a thin layer of I/O around it.
+
+<br>
+
+## Development
 
 ```bash
-cargo test -p ember-core
+npm install          # dependencies
+npm run tauri dev    # run in dev (tray app + hot reload)
 ```
 
-## 📜 Versioning & Auto-Updates
+Default shortcut: `Ctrl+Shift+Space`. Everything is tweakable from Settings.
 
-- `package.json` is the single source of truth for versions.
-- **Auto-Updates:** Built right in. When a new version is released, Ember will seamlessly prompt you to update to the newest features.
-- We follow [Conventional Commits](https://www.conventionalcommits.org/).
+**Tests** (the whole workspace, matching CI):
 
-## ⚖️ License & Copyright
+```bash
+cargo test --workspace
+```
 
-Ember is dual-licensed under MIT/Apache-2.0. However, the Ember name and logo are trademarks.
+<br>
+
+## Versioning & updates
+
+- `package.json` is the single source of truth for the version.
+- Releases are cut by [release-please](https://github.com/googleapis/release-please)
+  from [Conventional Commits](https://www.conventionalcommits.org/); merging the
+  standing release PR tags and publishes signed installers.
+- **Auto-update** is built in: Ember checks the latest signed GitHub release and
+  updates in place.
+
+<br>
+
+## License
+
+Dual-licensed under **MIT** / **Apache-2.0**. The Ember name and logo are trademarks.
 
 ---
-<p align="center">Made with ❤️ for frictionless workflows.</p>
+<p align="center"><sub>Built for frictionless writing. 🔥</sub></p>

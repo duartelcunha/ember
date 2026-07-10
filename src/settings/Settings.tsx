@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Logo } from "@/components/Logo";
 import { TitleBar } from "@/components/TitleBar";
+import { HotkeyCapture } from "./HotkeyCapture";
 import { UpdateChecker } from "./UpdateChecker";
 import {
   DEFAULT_SETTINGS,
@@ -536,7 +537,7 @@ export function Settings() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Ember</h1>
               <p className="text-sm text-fg-muted">
-                Refine your prompts in the moment, in any app.
+                Refine any text in the moment, in any app.
               </p>
             </div>
           </header>
@@ -779,24 +780,23 @@ export function Settings() {
             </TabsContent>
   
             <TabsContent value="hotkey">
-              <Section title="Global shortcut" titleId="hotkey-heading" hint="The combo that summons Ember in any app.">
-                <div className="flex gap-2">
-                  <Input
-                    aria-labelledby="hotkey-heading"
-                    value={hotkey}
-                    onChange={(e) => setHotkey(e.target.value)}
-                  />
-                  <Button
-                    onClick={() =>
-                      ipc
-                        .setHotkey(hotkey)
-                        .then(() => toast.success("Shortcut updated."))
-                        .catch(() => toast.error("Couldn't apply the shortcut."))
+              <Section
+                title="Global shortcut"
+                titleId="hotkey-heading"
+                hint="Click Set shortcut, then press the combo you want (e.g. Shift+Space). It's saved the moment you press it."
+              >
+                <HotkeyCapture
+                  value={hotkey}
+                  onCommit={async (accel) => {
+                    try {
+                      await ipc.setHotkey(accel);
+                      setHotkey(accel);
+                      toast.success(`Shortcut set to ${accel}.`);
+                    } catch {
+                      toast.error("Couldn't apply that shortcut (in use or invalid).");
                     }
-                  >
-                    Apply
-                  </Button>
-                </div>
+                  }}
+                />
               </Section>
               <div className="mt-4">
                 <Section title="Startup" hint="Launch Ember automatically with Windows.">
@@ -904,9 +904,10 @@ export function Settings() {
               <div className="flex flex-col gap-4">
                 <Section title="Ember">
                   <p className="text-sm text-fg-muted">
-                    In-the-moment prompt refiner for any app. Gemini primary, with an
-                    OpenAI-compatible fallback (OpenRouter by default) and Claude as an optional
-                    third family, guided by your profile. Built with Tauri.
+                    In-the-moment text refiner for any app, prompts, emails, messages, docs and
+                    more. Gemini primary, with an OpenAI-compatible fallback (OpenRouter by
+                    default) and Claude as an optional third family, guided by your profile. Built
+                    with Tauri.
                   </p>
                   <button
                     onClick={() =>

@@ -2,28 +2,20 @@ import { m } from "motion/react";
 import { useOrbMotion } from "./useOrbMotion";
 
 /**
- * O "orb" de refine: metamorfose de FORMA por cross-fade entre duas silhuetas genuinamente
- * diferentes, um blob rugoso e irregular (BRUTO) e uma estrela de 4 pontas afiada (POLIDO). Em
- * loop, o bruto encolhe/esbate enquanto a estrela cresce/acende e vice-versa, com o glow a
- * brilhar mais no pico polido. Le-se como algo a cristalizar do caos: o refine.
+ * O "orb" de refine: A MARCA em movimento. E sempre a estrela de 4 pontas do logo (reconhecivel),
+ * preenchida com o mesmo gradiente diagonal do logo, terracota BRUTA no canto inferior-esquerdo,
+ * a afinar-se para AMBAR polido no superior-direito. O "refine" e um brilho que VARRE a diagonal,
+ * do canto bruto ao polido, em loop: le-se como a estrela a ser continuamente lapidada/refinada.
+ * Um glow subtil respira por baixo. Roda devagar e reage ao cursor (inclina + estica).
  *
- * NAO anima o atributo `d` (o preset `domAnimation` do overlay nao o suporta). Em vez disso,
- * cross-fade de opacity + scale entre duas <path> sobrepostas: compositor-only, funciona com o
- * preset leve, e a diferenca real de forma entre as duas faz a leitura de metamorfose. Reage
- * ao movimento do rato (inclina + estica, via ember://orb-motion).
+ * Tudo compositor-only (opacity + transform); o sweep e um <rect> com mask da estrela a
+ * transl-dar na diagonal, sem animar filtros nem paths (o preset leve do overlay chega).
  */
 
-// BRUTO: blob assimetrico, pontas curtas e gastas, cantos irregulares.
-const RAW =
-  "M31 15 C 36 27 37 28 48 30 C 38 33 36 34 33 45 C 30 36 28 35 17 33 C 27 30 26 29 31 15 Z";
-// POLIDO: estrela de 4 pontas nitida e afiada, pontas longas.
-const POLISHED =
-  "M32 4 C 34 27 37 30 60 32 C 37 34 34 37 32 60 C 30 37 27 34 4 32 C 27 30 30 27 32 4 Z";
+// A estrela de 4 pontas da marca, viewBox 64, centrada em 32,32.
+const STAR = "M32 4 C 34 27 37 30 60 32 C 37 34 34 37 32 60 C 30 37 27 34 4 32 C 27 30 30 27 32 4 Z";
 
 const SIZE = 28;
-
-// Ciclo lento e premium; bruto e polido demoram-se no seu pico, a transicao e suave.
-const CYCLE = { repeat: Infinity, duration: 3.4, ease: [0.45, 0, 0.55, 1] as const };
 
 export function Orb() {
   const { tilt, stretchX, stretchY } = useOrbMotion();
@@ -36,19 +28,19 @@ export function Orb() {
       exit={{ opacity: 0, scale: 0.5 }}
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Glow radial, mais forte no pico polido (quando cristaliza). */}
+      {/* Glow radial subtil (minimalista, contido para nao ser cortado pela borda da janela). */}
       <m.div
         className="absolute"
         style={{
-          inset: -9,
+          inset: -4,
           borderRadius: "9999px",
           background:
-            "radial-gradient(circle, rgba(253,140,60,0.6) 0%, rgba(253,140,60,0) 70%)",
-          filter: "blur(1px)",
+            "radial-gradient(circle, rgba(253,140,60,0.5) 0%, rgba(253,140,60,0) 72%)",
+          filter: "blur(0.5px)",
           willChange: "opacity, transform",
         }}
-        animate={{ opacity: [0.28, 0.9, 0.28], scale: [0.78, 1.2, 0.78] }}
-        transition={CYCLE}
+        animate={{ opacity: [0.22, 0.5, 0.22], scale: [0.92, 1.04, 0.92] }}
+        transition={{ repeat: Infinity, duration: 2.6, ease: [0.4, 0, 0.6, 1] }}
       />
 
       {/* Reacao ao cursor: inclina + estica na direcao do movimento (springs). */}
@@ -56,37 +48,57 @@ export function Orb() {
         className="absolute inset-0"
         style={{ rotate: tilt, scaleX: stretchX, scaleY: stretchY, willChange: "transform" }}
       >
-        {/* Rotacao lenta continua, para nunca parecer estatica. */}
+        {/* Rotacao lenta continua, para a marca nunca parecer estatica. */}
         <m.div
           className="absolute inset-0"
           style={{ willChange: "transform" }}
           animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 14, ease: "linear" }}
+          transition={{ repeat: Infinity, duration: 16, ease: "linear" }}
         >
-          {/* Cada estado numa camada <div> propria: o scale/opacity vao no div (transform-origin
-              ao centro, fiavel), nao no <path> (onde o transform-origin do SVG e traicoeiro). */}
-          {/* BRUTO: blob terracota, encolhe e esbate quando a estrela toma conta. */}
-          <m.div
-            className="absolute inset-0"
-            style={{ willChange: "opacity, transform" }}
-            animate={{ opacity: [1, 0, 1], scale: [0.9, 0.68, 0.9] }}
-            transition={CYCLE}
-          >
-            <svg viewBox="0 0 64 64" className="h-full w-full">
-              <path d={RAW} fill="var(--color-ember-raw)" />
-            </svg>
-          </m.div>
-          {/* POLIDO: estrela ambar afiada, cresce e acende em contra-fase com o bruto. */}
-          <m.div
-            className="absolute inset-0"
-            style={{ willChange: "opacity, transform" }}
-            animate={{ opacity: [0, 1, 0], scale: [0.85, 1.06, 0.85] }}
-            transition={CYCLE}
-          >
-            <svg viewBox="0 0 64 64" className="h-full w-full">
-              <path d={POLISHED} fill="var(--color-ember-glow)" />
-            </svg>
-          </m.div>
+          <svg viewBox="0 0 64 64" className="absolute inset-0 h-full w-full">
+            <defs>
+              {/* Gradiente diagonal do logo: terracota bruta (baixo-esq) -> ambar polido (cima-dir). */}
+              <linearGradient id="ember-diag" x1="0.1" y1="0.9" x2="0.9" y2="0.1">
+                <stop offset="0%" stopColor="var(--color-ember-raw)" />
+                <stop offset="55%" stopColor="var(--color-accent)" />
+                <stop offset="100%" stopColor="var(--color-ember-glow)" />
+              </linearGradient>
+              {/* Mask com a forma da estrela: tudo o que desenharmos so aparece dentro dela. */}
+              <mask id="ember-star">
+                <path d={STAR} fill="#fff" />
+              </mask>
+            </defs>
+
+            {/* Base: a estrela da marca com o gradiente bruto->polido. */}
+            <path d={STAR} fill="url(#ember-diag)" />
+
+            {/* Sweep de refino: uma banda de luz que varre a diagonal (do canto bruto ao polido),
+                recortada pela forma da estrela. Da a leitura de "a ser refinada" em loop. Move-se
+                por `translateX` (transform, compositor-safe), nao pelo atributo `x` (que o preset
+                leve do overlay pode nao animar). A rotacao -45deg faz o varrimento diagonal. */}
+            <g mask="url(#ember-star)">
+              <m.rect
+                x={0}
+                y={-16}
+                width={22}
+                height={96}
+                fill="rgba(255,240,210,0.9)"
+                style={{
+                  transformBox: "view-box",
+                  transformOrigin: "32px 32px",
+                  willChange: "transform",
+                }}
+                initial={{ rotate: -45, x: -60 }}
+                animate={{ x: [-60, 74] }}
+                transition={{
+                  repeat: Infinity,
+                  duration: 2.2,
+                  ease: [0.5, 0, 0.5, 1],
+                  repeatDelay: 0.6,
+                }}
+              />
+            </g>
+          </svg>
         </m.div>
       </m.div>
     </m.div>

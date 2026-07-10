@@ -11,11 +11,12 @@
 
 <p align="center">
   <a href="https://github.com/duartelcunha/Ember/releases"><img src="https://img.shields.io/badge/release-v0.3.0-ff7a18?style=for-the-badge&labelColor=1a0e03" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Windows%20·%20macOS-2e2519?style=for-the-badge&logo=windows&logoColor=ffffff" alt="Platform">
+  <img src="https://img.shields.io/badge/Windows-2e2519?style=for-the-badge&logo=windows&logoColor=ffffff" alt="Platform">
+  <img src="https://img.shields.io/badge/macOS-in%20progress-2e2519?style=for-the-badge&logo=apple&logoColor=ffffff" alt="macOS in progress">
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri%202-24C8DB?style=for-the-badge&logo=tauri&logoColor=ffffff" alt="Tauri 2"></a>
   <img src="https://img.shields.io/badge/Rust-CE422B?style=for-the-badge&logo=rust&logoColor=ffffff" alt="Rust">
   <img src="https://img.shields.io/badge/React%2019-149ECA?style=for-the-badge&logo=react&logoColor=ffffff" alt="React 19">
-  <img src="https://img.shields.io/badge/MIT%20%2F%20Apache--2.0-4da3ff?style=for-the-badge&labelColor=0d1b2a" alt="License">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4da3ff?style=for-the-badge&labelColor=0d1b2a" alt="License"></a>
 </p>
 
 ---
@@ -36,7 +37,7 @@ back in place. Your clipboard is restored untouched.
 | ⚡ **Refine in place** | A global hotkey captures your selection, refines it, and pastes the result over the original, then quietly restores your clipboard. Works in editors, browsers, chat apps, and terminals. |
 | 🆓 **Free by default** | Runs on Google **Gemini** (generous free tier) as primary, with an **OpenAI-compatible** fallback defaulting to **OpenRouter** and a free reasoning model (DeepSeek R1). Point it at DeepSeek, Groq, or a local Ollama with one field. |
 | 🛡️ **Resilient, not fragile** | A pure retry/fallback state machine handles rate-limits, truncation, content-policy, and outages. Fallbacks are pre-validated at startup, never guessed at the moment of failure. It degrades honestly instead of silently. |
-| 🔒 **BYOK, strictly local** | Your API keys live in the OS credential vault (Windows Credential Manager / macOS Keychain), never in plain text, never anywhere but the provider. |
+| 🔒 **BYOK, strictly local** | Your API keys live in the Windows Credential Manager, never in plain text, never anywhere but the provider. |
 | 🎭 **Knows your project** | Optionally merges the `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` of your focused project into the refine, with secret-shaped lines redacted. Off by default. |
 | 💫 **Silky, deliberate UI** | A living mark that morphs from rough to refined and leans toward your cursor as it works. Compositor-only animations tuned for 120fps, a seamless frameless window, and a warm **Dark** or **Cream** theme. Respects your reduced-motion setting. |
 
@@ -132,7 +133,7 @@ cargo test --workspace
 
 ## License
 
-Dual-licensed under **MIT** / **Apache-2.0**. The Ember name and logo are trademarks.
+[MIT](LICENSE). The Ember name and logo are trademarks.
 
 ---
 <p align="center"><sub>Built for frictionless writing. 🔥</sub></p>

@@ -5,7 +5,7 @@
 <h1 align="center">Ember</h1>
 
 <p align="center">
-  <strong>Refine any prompt, in the moment, in any app.</strong><br>
+  <strong>Refine any text, in the moment, in any app.</strong><br>
   <em>Select text. Press a shortcut. Watch it sharpen in place.</em>
 </p>
 
@@ -26,6 +26,11 @@ app, hit the global shortcut, and a small orb appears by your cursor while a
 state-of-the-art model rewrites your selection. The refined text drops straight
 back in place. Your clipboard is restored untouched.
 
+Not just for AI prompts: it sharpens **any** text you've selected, an email, a
+Slack message, a commit body, docs, a terminal command, fixing grammar and
+clarity or restructuring it, in whatever language you wrote it. Three modes let
+you dial how far it goes, from a light **Polish** to a full **Turbo** rewrite.
+
 **No window switching. No copy-paste dance. No tab you forgot to close.**
 
 <br>
@@ -34,7 +39,8 @@ back in place. Your clipboard is restored untouched.
 
 |  |  |
 |---|---|
-| ⚡ **Refine in place** | A global hotkey captures your selection, refines it, and pastes the result over the original, then quietly restores your clipboard. Works in editors, browsers, chat apps, and terminals. |
+| ⚡ **Refine any text in place** | A global hotkey captures your selection, sharpens it, and pastes the result over the original, then quietly restores your clipboard. Prompts, emails, messages, commits, docs, terminal commands, anywhere you can select text. |
+| 🧬 **Never mangles your text** | Before the model ever sees it, Ember masks your code, URLs, file paths, and placeholders, then verifies they came back **exactly** intact. If anything is lost or the output looks wrong, it degrades: your original selection stays untouched instead of getting overwritten with something broken. |
 | 🆓 **Free by default** | Runs on Google **Gemini** (generous free tier) as primary, with an **OpenAI-compatible** fallback defaulting to **OpenRouter** and a free reasoning model (DeepSeek R1). Point it at DeepSeek, Groq, or a local Ollama with one field. |
 | 🛡️ **Resilient, not fragile** | A pure retry/fallback state machine handles rate-limits, truncation, content-policy, and outages. Fallbacks are pre-validated at startup, never guessed at the moment of failure. It degrades honestly instead of silently. |
 | 🔒 **BYOK, strictly local** | Your API keys live in the Windows Credential Manager, never in plain text, never anywhere but the provider. |
@@ -117,6 +123,23 @@ Default shortcut: `Ctrl+Shift+Space`. Everything is tweakable from Settings.
 ```bash
 cargo test --workspace
 ```
+
+<br>
+
+## Roadmap
+
+Ember works great today on free BYOK keys. Where it's headed:
+
+- **Zero-setup by default.** The next big step is dropping the bring-your-own-key
+  requirement, a built-in engine so Ember refines out of the box with nothing to
+  configure, and BYOK becomes an option for power users, not a prerequisite.
+- **A local, on-device mode.** Refine fully offline with a small local model, for
+  when you want zero network and total privacy.
+- **Preview before it pastes.** An optional accept/reject diff for the times you
+  want the last word before the text is replaced.
+- **macOS.** The core is already ported; it needs CI, signing, and real testing.
+- **Per-app tone.** Adapt the refine to where you are, a crisp shell command in a
+  terminal, a warm message in a chat app, a formal email in your mail client.
 
 <br>
 

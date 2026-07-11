@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/duartelcunha/Ember/compare/v0.4.0...v0.5.0) (2026-07-11)
+
+
+### Features
+
+* **overlay:** dark separation halo so the orb reads on any background ([8092806](https://github.com/duartelcunha/Ember/commit/80928063d4d677b59613b4e8db2f0d9cfb3d571d))
+* **preview:** opt-in approval gate before pasting the refined text ([330ca2c](https://github.com/duartelcunha/Ember/commit/330ca2c8e5bbe9083707478cf4f54951d1781327))
+
 ## [0.4.0](https://github.com/duartelcunha/Ember/compare/v0.3.0...v0.4.0) (2026-07-10)
 
 

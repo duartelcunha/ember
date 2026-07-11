@@ -28,7 +28,23 @@ export function Orb() {
       exit={{ opacity: 0, scale: 0.5 }}
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Glow radial subtil (minimalista, contido para nao ser cortado pela borda da janela). */}
+      {/* Halo de separacao escuro, POR BAIXO de tudo. Da contraste em fundos claros ou
+          atarefados (recorta o mark do fundo) e fica quase invisivel em fundos escuros. Estatico
+          e compositor-only (opacidade so), sem backdrop-filter (que re-amostrava o fundo a cada
+          frame do seguimento a 120fps e engasgava). Mantem o toque minimalista: so o suficiente
+          para o mark nunca desaparecer. */}
+      <div
+        className="absolute"
+        style={{
+          inset: -5,
+          borderRadius: "9999px",
+          background:
+            "radial-gradient(circle, rgba(10,8,6,0.5) 0%, rgba(10,8,6,0.22) 45%, rgba(10,8,6,0) 70%)",
+          willChange: "opacity",
+        }}
+      />
+
+      {/* Glow radial quente subtil (contido para nao ser cortado pela borda da janela). */}
       <m.div
         className="absolute"
         style={{

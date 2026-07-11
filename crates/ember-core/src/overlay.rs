@@ -26,6 +26,9 @@ pub enum FlowOutcome {
     /// O motor recusou colar (output vazio, ou perdeu/mutou um span de codigo/URL): a
     /// seleccao do utilizador ficou intacta, em vez de colar por cima algo partido.
     RefineUnclean,
+    /// O utilizador (ou o timeout) recusou aplicar o refinado no gate de preview. A seleccao
+    /// original foi restaurada; nada foi colado.
+    PreviewRejected,
 }
 
 /// O que mostrar no overlay e por quanto tempo, dado um `FlowOutcome`.
@@ -98,6 +101,12 @@ pub fn feedback_for(outcome: FlowOutcome) -> OverlayFeedback {
             provider: None,
             hide_after_ms: 1600,
         },
+        FlowOutcome::PreviewRejected => OverlayFeedback {
+            phase: "hint",
+            message: Some("Kept your original".into()),
+            provider: None,
+            hide_after_ms: 900,
+        },
     }
 }
 
@@ -169,5 +178,13 @@ mod tests {
         let fb = feedback_for(FlowOutcome::RefineUnclean);
         assert_eq!(fb.phase, "error");
         assert!(fb.message.unwrap().contains("Nothing changed"));
+    }
+
+    #[test]
+    fn preview_rejected_is_a_fast_hint_that_keeps_the_original() {
+        let fb = feedback_for(FlowOutcome::PreviewRejected);
+        assert_eq!(fb.phase, "hint");
+        assert!(fb.message.unwrap().contains("Kept your original"));
+        assert!(fb.hide_after_ms <= 1000);
     }
 }

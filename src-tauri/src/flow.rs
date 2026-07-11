@@ -148,11 +148,13 @@ async fn abort_cancelled(
 
 /// Orquestra todo o fluxo. `terminal` = a app em foco e um terminal (Ctrl+Shift+C/V).
 /// `project_title` = titulo da janela em foco (para contexto de projeto), ou `None` se desligado.
+/// `preview` = mostrar um gate de aprovacao (Enter aplica, Esc mantem) antes de colar.
 pub async fn run(
     app: AppHandle,
     terminal: bool,
     timing: CaptureTiming,
     project_title: Option<String>,
+    preview: bool,
 ) {
     emit(&app, "refining", None, None);
 
@@ -259,20 +261,48 @@ pub async fn run(
             // seleccao fica intacta em vez de colarmos algo partido por cima.
             match ember_core::postprocess(&raw, &prepared) {
                 ember_core::EngineResult::Paste(refined) => {
-                    let s = saved.clone();
-                    let settle_ms = timing.settle_ms;
-                    let pasted = tauri::async_runtime::spawn_blocking(move || {
-                        blocking_replace(refined, s, image, terminal, settle_ms)
-                    })
-                    .await;
-                    match pasted {
-                        Ok(Ok(true)) => {
-                            finish(&app, FlowOutcome::Success { provider }).await;
+                    // Gate de preview (opt-in): mostra um pill de aprovacao e espera Enter/Esc.
+                    // Fora do preview, `Accept` direto (comportamento de sempre). Ramifica-se ANTES
+                    // de mover `image` para o `blocking_replace`, porque o reject precisa dele.
+                    let decision = if preview {
+                        emit(
+                            &app,
+                            "preview",
+                            Some("Enter to apply \u{00b7} Esc to keep original".into()),
+                            None,
+                        );
+                        crate::preview_hook::gate(app.clone()).await
+                    } else {
+                        crate::preview_hook::Decision::Accept
+                    };
+
+                    match decision {
+                        crate::preview_hook::Decision::Accept => {
+                            let s = saved.clone();
+                            let settle_ms = timing.settle_ms;
+                            let pasted = tauri::async_runtime::spawn_blocking(move || {
+                                blocking_replace(refined, s, image, terminal, settle_ms)
+                            })
+                            .await;
+                            match pasted {
+                                Ok(Ok(true)) => {
+                                    finish(&app, FlowOutcome::Success { provider }).await;
+                                }
+                                _ => {
+                                    // O refinado nao chegou a ser armado no clipboard (ocupado). A
+                                    // seleccao ficou intacta: nao reportar "Refined" falso.
+                                    finish(&app, FlowOutcome::PasteFailed).await;
+                                }
+                            }
                         }
-                        _ => {
-                            // O refinado nao chegou a ser armado no clipboard (ocupado). A
-                            // seleccao ficou intacta: nao reportar "Refined" falso.
-                            finish(&app, FlowOutcome::PasteFailed).await;
+                        crate::preview_hook::Decision::Reject => {
+                            // Como o abort de cancelamento: restaura o clipboard, mantem o original.
+                            let s = saved.clone();
+                            let _ = tauri::async_runtime::spawn_blocking(move || {
+                                blocking_restore(s, image, terminal)
+                            })
+                            .await;
+                            finish(&app, FlowOutcome::PreviewRejected).await;
                         }
                     }
                 }

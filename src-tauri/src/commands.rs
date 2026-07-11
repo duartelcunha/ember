@@ -41,6 +41,7 @@ pub struct SettingsDto {
     paste_settle_ms: u64,
     debug_mode: bool,
     project_context: bool,
+    preview_before_paste: bool,
     theme: String,
 }
 
@@ -109,6 +110,7 @@ fn build_dto(app: &AppHandle, cfg: &config::Config) -> SettingsDto {
         paste_settle_ms: cfg.paste_settle_ms,
         debug_mode: cfg.debug_mode,
         project_context: cfg.project_context,
+        preview_before_paste: cfg.preview_before_paste,
         theme: cfg.theme.clone(),
     }
 }
@@ -247,6 +249,13 @@ pub fn set_terminal_handling(app: AppHandle, enabled: bool) -> Result<(), String
 pub fn set_project_context(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.project_context = enabled;
+    config::save(&app, &cfg).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_preview_before_paste(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.preview_before_paste = enabled;
     config::save(&app, &cfg).map_err(|e| e.to_string())
 }
 

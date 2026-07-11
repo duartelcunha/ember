@@ -43,6 +43,7 @@ export interface EmberSettings {
   pasteSettleMs: number;
   debugMode: boolean;
   projectContext: boolean;
+  previewBeforePaste: boolean;
   theme: Theme;
 }
 
@@ -69,6 +70,7 @@ export const DEFAULT_SETTINGS: EmberSettings = {
   pasteSettleMs: 90,
   debugMode: false,
   projectContext: false,
+  previewBeforePaste: false,
   theme: "dark",
 };
 
@@ -92,6 +94,8 @@ export const ipc = {
     invoke<void>("set_thinking", { enabled, level }),
   setTerminalHandling: (enabled: boolean) => invoke<void>("set_terminal_handling", { enabled }),
   setProjectContext: (enabled: boolean) => invoke<void>("set_project_context", { enabled }),
+  setPreviewBeforePaste: (enabled: boolean) =>
+    invoke<void>("set_preview_before_paste", { enabled }),
   setCaptureTiming: (polls: number, stepMs: number, settleMs: number) =>
     invoke<EmberSettings>("set_capture_timing", { polls, stepMs, settleMs }),
   setProfile: (text: string) => invoke<void>("set_profile", { text }),

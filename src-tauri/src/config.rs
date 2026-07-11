@@ -44,6 +44,9 @@ pub struct Config {
     /// ao perfil global. Default OFF (privacidade: um repo de cliente nao deve ir para o LLM sem
     /// o utilizador ligar isto). So-leitura de ficheiros de contexto conhecidos, com redacao.
     pub project_context: bool,
+    /// Preview antes de colar: mostra um pill de aprovacao apos refinar e cola so no Enter (Esc
+    /// mantem o original). Default OFF. So Windows (usa um keyboard hook para capturar Enter/Esc).
+    pub preview_before_paste: bool,
     /// Tema visual da janela de Settings: "dark" (default) ou "cream". So afeta as Settings; a
     /// overlay/splash mantem a identidade dark de marca.
     pub theme: String,
@@ -75,6 +78,7 @@ impl Default for Config {
             paste_settle_ms: 90,
             debug_mode: false,
             project_context: false,
+            preview_before_paste: false,
             theme: "dark".to_string(),
         }
     }

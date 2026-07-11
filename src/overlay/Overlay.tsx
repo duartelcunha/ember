@@ -17,6 +17,8 @@ function announcement(s: OverlayState): string | null {
       return s.message ?? "Refine failed";
     case "hint":
       return s.message ?? "Select text first";
+    case "preview":
+      return s.message ?? "Apply refined text? Press Enter to apply, Escape to keep your original";
     default:
       return null;
   }
@@ -73,6 +75,15 @@ export function Overlay() {
             )}
             {s.phase === "hint" && (
               <Pill key="hint" kind="hint" text={s.message ?? "Select text first"} />
+            )}
+            {s.phase === "preview" && (
+              // Gate de aprovacao: a decisao (Enter/Esc) e capturada no Rust por keyboard hook,
+              // este pill so mostra. `kind="hint"` da o registo neutro de prompt.
+              <Pill
+                key="preview"
+                kind="hint"
+                text={s.message ?? "Enter to apply · Esc to keep original"}
+              />
             )}
           </AnimatePresence>
         </div>

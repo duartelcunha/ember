@@ -6,6 +6,7 @@ mod config;
 mod flow;
 mod foreground;
 mod logging;
+mod preview_hook;
 mod profile;
 mod project;
 mod providers;
@@ -380,10 +381,11 @@ pub(crate) fn register_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), Strin
                 step_ms: cfg.capture_step_ms,
                 settle_ms: cfg.paste_settle_ms,
             };
+            let preview = cfg.preview_before_paste;
             show_orb_at_cursor(app);
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                flow::run(app.clone(), terminal, timing, project_title).await;
+                flow::run(app.clone(), terminal, timing, project_title, preview).await;
                 // Liberta a guarda so no fim do ciclo (o orb ja foi escondido dentro de run):
                 // ate aqui, o hide_after deste ciclo nao pode ser pisado por outra tecla.
                 app.state::<state::AppState>()
@@ -465,6 +467,7 @@ pub fn run() {
             commands::set_thinking,
             commands::set_terminal_handling,
             commands::set_project_context,
+            commands::set_preview_before_paste,
             commands::set_capture_timing,
             commands::set_api_key,
             commands::clear_api_key,

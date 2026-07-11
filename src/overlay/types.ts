@@ -1,6 +1,6 @@
 /** Estado do overlay junto ao cursor. */
 
-export type OverlayPhase = "hidden" | "refining" | "success" | "error" | "hint";
+export type OverlayPhase = "hidden" | "refining" | "success" | "error" | "hint" | "preview";
 
 export interface OverlayState {
   phase: OverlayPhase;

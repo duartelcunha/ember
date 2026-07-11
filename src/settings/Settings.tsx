@@ -722,6 +722,25 @@ export function Settings() {
                 </Section>
 
                 <Section
+                  title="Preview before paste"
+                  hint="After refining, show a small confirmation by your cursor and paste only when you press Enter. Press Esc (or your hotkey) to keep your original. Windows only."
+                >
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="preview-before-paste">Confirm before pasting</Label>
+                    <Switch
+                      id="preview-before-paste"
+                      checked={s.previewBeforePaste}
+                      onCheckedChange={(v) => {
+                        setS({ ...s, previewBeforePaste: v });
+                        ipc
+                          .setPreviewBeforePaste(v)
+                          .catch(() => setS((prev) => ({ ...prev, previewBeforePaste: !v })));
+                      }}
+                    />
+                  </div>
+                </Section>
+
+                <Section
                   title="Advanced"
                   hint="Capture timing, for power users. The defaults work for almost everyone."
                 >

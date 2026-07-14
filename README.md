@@ -71,7 +71,7 @@ you dial how far it goes.
 > flattens the result to a single line so a stray newline never submits your command.
 
 <p align="center">
-  <img src="docs/media/refine-terminal.gif" alt="A rough prompt typed into Claude Code's input line is refined in place, staying on a single line">
+  <img src="docs/media/refine-terminal-claude-code.gif" alt="A rough prompt typed into Claude Code's input line is refined in place, staying on a single line">
   <br>
   <sub>A rough prompt in Claude Code's input line, refined in place.</sub>
 </p>

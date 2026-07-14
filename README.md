@@ -22,10 +22,6 @@
 
 ---
 
-<p align="center">
-  <img src="docs/media/refine-slack.gif" alt="A rambling Slack update is selected, the hotkey is pressed, and Ember rewrites it in place with headings and bullets">
-</p>
-
 You know that half-written email, that clumsy Slack message, that messy prompt
 you keep rewording? Select it, press one shortcut, and Ember cleans it up right
 where it sits, no chat window, no copy-paste, no losing your place.

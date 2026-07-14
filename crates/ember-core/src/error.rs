@@ -8,7 +8,10 @@ use thiserror::Error;
 /// - `Success`: 200 com conteudo util.
 /// - `Transient`: 429/5xx/timeout/overload. Retry com backoff; fallback no esgotamento.
 /// - `Auth`: 401/403. Chave invalida -> fallback (o outro provider tem chave diferente).
-/// - `Payload`: 400/404/413. Bug nosso -> propaga sem mascarar (nao faz fallback).
+/// - `ModelNotFound`: 404. O MODELO nao existe (foi descontinuado, ou o id esta mal escrito).
+///   Faz fallback: a outra familia tem um modelo completamente diferente e nao sabe nada deste.
+///   Sem retry (repetir devolve o mesmo 404).
+/// - `Payload`: 400/413/422. Bug nosso no pedido -> propaga sem mascarar (nao faz fallback).
 /// - `ContentPolicy`: recusa por politica (Claude stop_reason=refusal; Gemini SAFETY).
 ///   Nao-transitorio: propaga por defeito (config pode tentar a outra familia).
 /// - `Truncated`: resposta cortada por max_tokens. Deterministico no mesmo provider
@@ -18,6 +21,7 @@ pub enum OutcomeClass {
     Success,
     Transient { retry_after_ms: Option<u64> },
     Auth,
+    ModelNotFound,
     Payload,
     ContentPolicy,
     Truncated,
@@ -34,6 +38,8 @@ pub enum CoreError {
     Auth,
     #[error("pedido invalido (payload)")]
     Payload,
+    #[error("o modelo escolhido nao existe neste provider")]
+    ModelNotFound,
     #[error("recusado por politica de conteudo")]
     ContentPolicy,
     #[error("resposta truncada pelo limite de tokens")]

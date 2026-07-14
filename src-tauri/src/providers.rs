@@ -90,6 +90,18 @@ async fn call_once(
         // JSON normal, nao SSE, por isso lemos o corpo inteiro aqui (so neste ramo).
         outcome => {
             let body: Option<Value> = resp.json().await.ok();
+            // O corpo do erro era lido e deitado fora: ficavamos a saber a CLASSE (rate-limit)
+            // mas nunca o motivo que o provider explica ("free-models-per-day", "requires
+            // credits", "model not found"...). Sem isto e impossivel dizer ao utilizador o que
+            // fazer. Nao ha segredos aqui: e a mensagem de erro do provider, nunca a chave nem o
+            // texto do utilizador. Truncado, para um corpo grande nao inundar o log.
+            if let Some(b) = body.as_ref() {
+                let s = b.to_string();
+                let head: String = s.chars().take(400).collect();
+                log::warn!("{provider:?} HTTP {status} body: {head}");
+            } else {
+                log::warn!("{provider:?} HTTP {status} (no JSON body)");
+            }
             match outcome {
                 // Chave Gemini invalida vem como 400 (classificado Payload). Reclassifica
                 // como Auth para disparar o fallback: a outra familia tem chave diferente.
@@ -251,20 +263,42 @@ pub async fn refine(
         on_attempt(*provider, state.provider_index, state.attempt);
         match call_once(client, *provider, key, &req, pctx, on_delta).await {
             Ok(text) => {
+                log::info!(
+                    "provider {:?} ok (model={model} attempt={})",
+                    provider,
+                    state.attempt
+                );
                 return Ok(LlmResponse {
                     text,
                     provider: *provider,
                 })
             }
-            Err(outcome) => match plan(&state, &outcome, cfg, jitter01()) {
-                Decision::Retry { delay_ms, next } => {
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                    state = next;
+            // Cada tentativa falhada era engolida em silencio: a overlay dizia "provider error"
+            // e o log nao tinha rasto nenhum de qual provider falhou nem porque. Logamos o
+            // outcome (ja e um enum sem segredos, nao o corpo cru) e a decisao da maquina.
+            Err(outcome) => {
+                log::warn!(
+                    "provider {:?} failed (model={model} attempt={}): {outcome:?}",
+                    provider,
+                    state.attempt
+                );
+                match plan(&state, &outcome, cfg, jitter01()) {
+                    Decision::Retry { delay_ms, next } => {
+                        log::info!("retrying {:?} in {delay_ms}ms", provider);
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        state = next;
+                    }
+                    Decision::Fallback { next } => {
+                        log::info!("falling back to the next provider family");
+                        state = next;
+                    }
+                    Decision::Fail { reason } => {
+                        log::error!("chain exhausted: {reason:?}");
+                        return Err(reason);
+                    }
+                    Decision::Succeed => return Err(CoreError::EmptyResponse),
                 }
-                Decision::Fallback { next } => state = next,
-                Decision::Fail { reason } => return Err(reason),
-                Decision::Succeed => return Err(CoreError::EmptyResponse),
-            },
+            }
         }
     }
 }

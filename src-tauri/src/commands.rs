@@ -446,17 +446,20 @@ pub fn open_repo() -> Result<(), String> {
     open_in_browser(REPO_URL)
 }
 
-/// Consola onde se cria a chave de cada provider. O frontend so manda o `provider` (um de tres
-/// valores conhecidos); o URL vive aqui, para nunca receber um URL arbitrario do webview.
-/// O provider "openai" e OpenAI-COMPATIBLE e o default e o OpenRouter, por isso e para la que
-/// aponta. Quem trocar a base URL (DeepSeek, Groq, Ollama local) tira a chave no site respetivo.
+/// Consola onde se cria a chave. O frontend so manda o NOME de uma consola conhecida (nunca um
+/// URL): assim o webview nunca consegue mandar o SO abrir um endereco arbitrario.
+///
+/// O provider de fallback e OpenAI-COMPATIBLE e serve varios servicos, por isso a consola nao se
+/// deriva do provider mas da Base URL escolhida (o frontend resolve isso e manda o nome).
 #[tauri::command]
 pub fn open_key_console(provider: String) -> Result<(), String> {
     let url = match provider.as_str() {
         "gemini" => "https://aistudio.google.com/apikey",
-        "openai" => "https://openrouter.ai/keys",
+        "groq" => "https://console.groq.com/keys",
+        "openai" => "https://platform.openai.com/api-keys",
+        "openrouter" => "https://openrouter.ai/keys",
         "claude" => "https://console.anthropic.com/settings/keys",
-        _ => return Err(format!("invalid provider: {provider}")),
+        _ => return Err(format!("unknown key console: {provider}")),
     };
     open_in_browser(url)
 }
@@ -516,10 +519,19 @@ pub(crate) fn friendly_error(e: &ember_core::CoreError) -> String {
     match e {
         NoProvidersConfigured => "No API key set. Opening settings…".into(),
         Auth => "Invalid API key. Check settings.".into(),
+        // Acontece de verdade: os providers descontinuam modelos (a Google matou o
+        // `gemini-2.5-flash-lite`). O utilizador tem de saber que o problema e o MODELO, nao a
+        // chave nem a rede, senao anda a trocar chaves boas as cegas (aconteceu).
+        ModelNotFound => "That model no longer exists. Pick another one in settings.".into(),
         ContentPolicy => "Blocked by the provider's content policy.".into(),
         Truncated => "Selection too long for the model. Nothing changed.".into(),
         KeyStore => "Couldn't read your saved keys. Reopen and re-save them.".into(),
-        AllProvidersFailed => "Providers failed (network or limits). Try again.".into(),
+        // O caso esmagadoramente comum aqui e o rate-limit das free tiers (Gemini e os modelos
+        // `:free` do OpenRouter). Dizer "network or limits" mandava o utilizador a procurar um
+        // problema de rede que nao existe; a accao util e esperar ou por uma chave paga.
+        AllProvidersFailed => {
+            "Rate limited (free tiers) or offline. Wait a moment, or add another key.".into()
+        }
         _ => "Couldn't refine. Try again.".into(),
     }
 }

@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type ProviderKind = "gemini" | "openai" | "claude";
+
+/** Consolas de chave que o Rust sabe abrir (ver `open_key_console`). O provider "openai" e
+ *  OpenAI-COMPATIBLE: a consola depende do endpoint escolhido, nao do provider. */
+export type KeyConsole = "gemini" | "groq" | "openai" | "openrouter" | "claude";
 export type ProfileSource = "claude_md" | "user_edited" | "default";
 export type RefineMode = "adaptive" | "polish" | "turbo";
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
@@ -50,8 +54,10 @@ export interface EmberSettings {
 export const DEFAULT_SETTINGS: EmberSettings = {
   geminiModel: "gemini-2.5-flash",
   claudeModel: "claude-haiku-4-5",
-  openaiModel: "deepseek/deepseek-r1:free",
-  openaiBaseUrl: "https://openrouter.ai/api/v1",
+  // Espelham os defaults do Rust (ember_core::providers). O fallback e o Groq: free tier com
+  // ~14 000 pedidos/dia, contra os ~50/dia dos modelos gratuitos do OpenRouter.
+  openaiModel: "llama-3.3-70b-versatile",
+  openaiBaseUrl: "https://api.groq.com/openai/v1",
   hotkey: "CmdOrCtrl+Shift+Space",
   autostart: false,
   hasGeminiKey: false,
@@ -105,8 +111,10 @@ export const ipc = {
   readRecentLogs: (lines: number) => invoke<string>("read_recent_logs", { lines }),
   revealLogDir: () => invoke<void>("reveal_log_dir"),
   openRepo: () => invoke<void>("open_repo"),
-  /** Abre a consola onde se cria a chave deste provider (AI Studio, OpenRouter, Anthropic).
-   *  O URL vive no Rust: aqui so vai o provider. */
-  openKeyConsole: (provider: ProviderKind) => invoke<void>("open_key_console", { provider }),
+  /** Abre a consola onde se cria a chave. `console` e o NOME de uma consola conhecida, nunca um
+   *  URL: os URLs vivem no Rust, para o webview nunca mandar o SO abrir um endereco arbitrario.
+   *  O provider de fallback e OpenAI-compatible e serve varios servicos, por isso a consola vem
+   *  do endpoint escolhido (groq/openai/openrouter), nao do nome do provider. */
+  openKeyConsole: (console: KeyConsole) => invoke<void>("open_key_console", { provider: console }),
   getDiagnostics: () => invoke<string>("get_diagnostics"),
 };

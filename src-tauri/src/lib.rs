@@ -206,6 +206,21 @@ async fn orb_follow_loop(app: AppHandle) {
         if !matches!(w.is_visible(), Ok(true)) {
             break;
         }
+        // O seguimento e do ORB. Assim que a fase deixa de ser "refining" (a pilula do preview
+        // ou do resultado toma o lugar), congela: uma pilula que persegue o rato e impossivel de
+        // ler, e junto as bordas do ecra dava saltos (o clamping muda de "so a caixa do orb"
+        // para "a janela toda"). Reposiciona uma ultima vez com o clamping da pilula, para ela
+        // ficar inteira dentro do ecra, e sai do loop.
+        if !app
+            .state::<state::AppState>()
+            .orb_visible
+            .load(Ordering::SeqCst)
+        {
+            if let Some((x, y)) = orb_target(&app, &w) {
+                let _ = w.set_position(PhysicalPosition::new(x, y));
+            }
+            break;
+        }
         let now = tokio::time::Instant::now();
         let dt = (now - last).as_secs_f64();
         last = now;

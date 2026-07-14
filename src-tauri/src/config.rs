@@ -84,6 +84,60 @@ impl Default for Config {
     }
 }
 
+/// Modelos que sabemos pertencer a cada endpoint do provider de fallback. Serve para detetar um
+/// modelo que ficou COLADO AO ENDPOINT ERRADO, que e o que acontece quando o utilizador (ou uma
+/// migracao nossa) troca de servico: um id do OpenRouter mandado ao Groq da 404.
+///
+/// `DEAD` sao ids que ja nem existem: o `deepseek-r1:free` foi descontinuado pelo OpenRouter (era
+/// o nosso default, portanto todo o utilizador novo apanhava um erro em todos os refines) e o
+/// `qwen3-coder:free` e um modelo de CODIGO, mau para prosa e o mais rate-limited de todos.
+const DEAD_MODELS: [&str; 2] = ["deepseek/deepseek-r1:free", "qwen/qwen3-coder:free"];
+const OPENROUTER_MODELS: [&str; 3] = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-4-31b-it:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+];
+const GROQ_MODELS: [&str; 3] = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "openai/gpt-oss-120b",
+];
+const OPENAI_MODELS: [&str; 3] = ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5-nano"];
+
+/// O modelo a usar, dado o que esta gravado e o endpoint atual.
+///
+/// Tres casos, e o terceiro e o que nos mordeu: (1) vazio ou morto -> default do endpoint;
+/// (2) modelo que sabemos ser de OUTRO endpoint -> default do endpoint atual (senao ficava um id
+/// do OpenRouter apontado ao Groq, que da 404 e aparece como "Custom..." na UI);
+/// (3) qualquer outro -> NAO se toca (e um modelo que o utilizador escreveu a mao, e a escolha
+/// dele manda).
+fn migrate_openai_model(model: &str, base_url: &str, default_model: &str) -> String {
+    let is_openrouter = base_url.contains("openrouter.ai");
+    let is_groq = base_url.contains("api.groq.com");
+    let is_openai = base_url.contains("api.openai.com");
+
+    // Default do endpoint atual. Um endpoint desconhecido (DeepSeek, Ollama...) nao tem lista
+    // nossa: fica com o default global, que e o melhor palpite que temos.
+    let endpoint_default = if is_openrouter {
+        OPENROUTER_MODELS[0]
+    } else {
+        default_model
+    };
+
+    if model.is_empty() || DEAD_MODELS.contains(&model) {
+        return endpoint_default.to_string();
+    }
+
+    // Pertence a um endpoint que NAO e o atual?
+    let belongs_elsewhere = (OPENROUTER_MODELS.contains(&model) && !is_openrouter)
+        || (GROQ_MODELS.contains(&model) && !is_groq)
+        || (OPENAI_MODELS.contains(&model) && !is_openai);
+    if belongs_elsewhere {
+        return endpoint_default.to_string();
+    }
+    model.to_string()
+}
+
 impl Config {
     /// Normaliza valores fora de gama ou vazios (config editada a mao, ou de uma versao
     /// anterior). Campos criticos vazios voltam ao default; o timing e clampado as gamas
@@ -98,16 +152,20 @@ impl Config {
         if self.claude_model.trim().is_empty() {
             self.claude_model = d.claude_model;
         }
-        if self.openai_model.trim().is_empty() {
-            self.openai_model = d.openai_model;
-        }
         // Base URL vazia -> default; barra final removida (nao duplicar no caminho do endpoint).
+        // Resolvida ANTES do modelo, porque a migracao do modelo depende do endpoint.
         let base = self.openai_base_url.trim().trim_end_matches('/');
         self.openai_base_url = if base.is_empty() {
-            d.openai_base_url
+            d.openai_base_url.clone()
         } else {
             base.to_string()
         };
+
+        self.openai_model = migrate_openai_model(
+            self.openai_model.trim(),
+            &self.openai_base_url,
+            &d.openai_model,
+        );
         if self.hotkey.trim().is_empty() {
             self.hotkey = d.hotkey;
         }
@@ -158,6 +216,60 @@ mod tests {
     }
 
     #[test]
+    fn model_from_the_wrong_endpoint_is_swapped_for_one_that_exists_there() {
+        // Regressao real (vista na UI): o default do fallback passou para o Groq, mas o modelo
+        // gravado continuou a ser um id do OpenRouter (`gemma:free`). Um id do OpenRouter no Groq
+        // da 404, e o seletor de modelo mostrava "Custom...", como se o utilizador o tivesse
+        // escrito a mao.
+        let d = Config::default();
+        let mut c = Config::default(); // base URL = Groq (default)
+        c.openai_model = "google/gemma-4-31b-it:free".into();
+        assert_eq!(c.sanitize().openai_model, d.openai_model);
+
+        // E ao contrario: um modelo do Groq com a base URL no OpenRouter.
+        let mut r = Config::default();
+        r.openai_base_url = "https://openrouter.ai/api/v1".into();
+        r.openai_model = "llama-3.3-70b-versatile".into();
+        assert_eq!(
+            r.sanitize().openai_model,
+            "meta-llama/llama-3.3-70b-instruct:free"
+        );
+
+        // Um modelo escrito A MAO (que nao conhecemos) fica INTACTO em qualquer endpoint: a
+        // escolha do utilizador manda, e adivinhar por ele seria pior do que nao fazer nada.
+        let mut mine = Config::default();
+        mine.openai_base_url = "https://api.deepseek.com/v1".into();
+        mine.openai_model = "deepseek-chat".into();
+        assert_eq!(mine.sanitize().openai_model, "deepseek-chat");
+    }
+
+    #[test]
+    fn sanitize_replaces_dead_models_with_one_that_fits_the_endpoint() {
+        // Regressao real: o `deepseek-r1:free` foi descontinuado pelo OpenRouter e quem o tinha
+        // gravado na config apanhava um erro em TODOS os refines, sem forma de perceber porque.
+        let d = Config::default();
+        for dead in ["deepseek/deepseek-r1:free", "qwen/qwen3-coder:free"] {
+            // No endpoint por defeito (Groq): leva o default do Groq.
+            let mut c = Config::default();
+            c.openai_model = dead.into();
+            assert_eq!(c.sanitize().openai_model, d.openai_model);
+
+            // Quem ficou no OpenRouter leva um id DO OPENROUTER. Dar-lhe o id do Groq trocava um
+            // modelo morto por um inexistente naquele endpoint: nao corrigia nada.
+            let mut r = Config::default();
+            r.openai_base_url = "https://openrouter.ai/api/v1".into();
+            r.openai_model = dead.into();
+            let r = r.sanitize();
+            assert_eq!(r.openai_model, "meta-llama/llama-3.3-70b-instruct:free");
+            assert_eq!(r.openai_base_url, "https://openrouter.ai/api/v1");
+        }
+        // Um modelo escolhido a mao pelo utilizador NAO e tocado.
+        let mut mine = Config::default();
+        mine.openai_model = "mistralai/mistral-small:free".into();
+        assert_eq!(mine.sanitize().openai_model, "mistralai/mistral-small:free");
+    }
+
+    #[test]
     fn sanitize_leaves_valid_config_untouched() {
         let c = Config::default();
         assert_eq!(c.clone().sanitize(), c);
@@ -170,9 +282,17 @@ mod tests {
         c.openai_base_url = "https://openrouter.ai/api/v1/".into();
         let d = Config::default();
         let c = c.sanitize();
-        assert_eq!(c.openai_model, d.openai_model);
+        // Modelo vazio NO OPENROUTER -> um modelo do OpenRouter. Dar-lhe o default (que e um id
+        // do Groq) seria "corrigir" para um modelo inexistente naquele endpoint.
+        assert_eq!(c.openai_model, "meta-llama/llama-3.3-70b-instruct:free");
         // barra final removida
         assert_eq!(c.openai_base_url, "https://openrouter.ai/api/v1");
+
+        // Modelo vazio no endpoint por defeito (Groq) -> o modelo default.
+        let mut g = Config::default();
+        g.openai_model = "  ".into();
+        assert_eq!(g.sanitize().openai_model, d.openai_model);
+
         // base URL totalmente vazia -> default
         let mut c2 = Config::default();
         c2.openai_base_url = "   ".into();

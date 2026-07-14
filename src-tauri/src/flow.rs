@@ -295,10 +295,18 @@ pub async fn run(
                         crate::preview_hook::Decision::Accept => {
                             let s = saved.clone();
                             let settle_ms = timing.settle_ms;
+                            log::info!(
+                                "paste: starting (terminal={} preview={} len={} has_newline={})",
+                                terminal,
+                                preview,
+                                refined.chars().count(),
+                                refined.contains('\n')
+                            );
                             let pasted = tauri::async_runtime::spawn_blocking(move || {
                                 blocking_replace(refined, s, image, terminal, settle_ms)
                             })
                             .await;
+                            log::info!("paste: done (armed={pasted:?})");
                             match pasted {
                                 Ok(Ok(true)) => {
                                     finish(&app, FlowOutcome::Success { provider }).await;
@@ -333,6 +341,11 @@ pub async fn run(
             }
         }
         Err(e) => {
+            // Sem isto, um "provider error" na overlay nao deixava rasto NENHUM no ficheiro de
+            // log: o utilizador via a mensagem amigavel e nos ficavamos sem a causa (que
+            // provider, que codigo HTTP, que corpo). Um erro que o utilizador ve tem de ser
+            // sempre diagnosticavel a posteriori.
+            log::error!("refine failed: {e:?}");
             let s = saved.clone();
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 blocking_restore(s, image, terminal)

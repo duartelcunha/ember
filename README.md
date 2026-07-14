@@ -49,7 +49,7 @@ you dial how far it goes.
 | ⚡ **Refine any text in place** | A global hotkey captures your selection, sharpens it, and pastes the result over the original, then quietly restores your clipboard. Prompts, emails, messages, commits, docs, terminal commands, anywhere you can select text. |
 | 🧬 **Never mangles your text** | Before the model ever sees it, Ember masks your code, URLs, file paths, and placeholders, then verifies they came back **exactly** intact. If anything is lost or the output looks wrong, it degrades: your original selection stays untouched instead of getting overwritten with something broken. |
 | ✋ **You get the last word** | Turn on **Confirm before pasting** and Ember shows a tiny prompt by your cursor after refining, applying only when you press Enter (Esc keeps your original). It captures the keys without stealing focus, so Enter never leaks into the app you're in. |
-| 🆓 **Runs on free tiers** | Primary is Google **Gemini**, whose free tier covers everyday personal use. Fallback is any **OpenAI-compatible** endpoint, defaulting to **OpenRouter** with a free reasoning model (DeepSeek R1). Point it at DeepSeek, Groq, or a local Ollama with one field. |
+| 🆓 **Runs on free tiers** | Primary is Google **Gemini**, whose free tier covers everyday personal use. The fallback is any **OpenAI-compatible** endpoint, defaulting to **Groq**: free, no credit card, and roughly 14,000 requests a day, so the safety net is actually there when you need it. Switch it to OpenAI or OpenRouter in one click, or point it at DeepSeek or a local Ollama. Free tiers do have daily caps; for heavy use, add a cheap paid key (Claude Haiku) as a third family. |
 | 🛡️ **Resilient, not fragile** | A pure retry/fallback state machine handles rate-limits, truncation, content-policy, and outages. Fallbacks are pre-validated at startup, never guessed at the moment of failure. It degrades honestly instead of silently. |
 | 🔒 **BYOK, strictly local** | Your API keys live in the Windows Credential Manager, never in plain text, never anywhere but the provider. |
 | 🎭 **Knows your project** | Optionally merges the `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` of your focused project into the refine, with secret-shaped lines redacted. Off by default. |
@@ -61,7 +61,7 @@ you dial how far it goes.
 
 1. Grab the latest installer from the [**Releases**](https://github.com/duartelcunha/Ember/releases/latest) page.
 2. Launch Ember. It settles into your system tray.
-3. Open **Settings** and drop in a free API key, [Gemini](https://aistudio.google.com/apikey) or [OpenRouter](https://openrouter.ai/keys) both have a free tier and take a minute to grab. *(Zero-key setup is on the [roadmap](#roadmap).)*
+3. Open **Settings** and drop in a free API key. [Gemini](https://aistudio.google.com/apikey) and [Groq](https://console.groq.com/keys) are both free, need no credit card, and take a minute to grab. Each provider card has a button that opens the right page for you. *(Zero-key setup is on the [roadmap](#roadmap).)*
 4. Select text anywhere and press `Ctrl+Shift+Space` (rebindable to any combo you like).
 5. That's it, the polished version lands right where your text was.
 
@@ -79,19 +79,20 @@ you dial how far it goes.
 
 ## A closer look
 
-**Confirm before pasting.** After refining, a small pill waits by your cursor:
-Enter applies, Esc keeps your original. Nothing lands without your say-so.
+**Confirm before pasting.** Turn this on and, after refining, a small pill waits
+by your cursor: Enter applies, Esc keeps your original. Nothing lands without
+your say-so. Ember captures those two keys without stealing focus, so the Enter
+never leaks into the app you're in.
+
+**Settings, in Cream or Dark.** Every provider card has a button that opens the
+page where its key is created, so you never have to go hunting for it.
 
 <p align="center">
-  <img src="docs/media/preview-pill.png" alt="A refined Slack update with headings and bullets, held behind an Enter-to-apply / Esc-to-keep-original pill">
+  <img src="docs/media/settings-cream.png" width="90%" alt="Provider settings in the cream theme, with a Get a key button on each provider card">
 </p>
 
-**Settings, in Cream or Dark.** Every provider card has a button that takes you
-straight to where its key is created.
-
 <p align="center">
-  <img src="docs/media/settings-cream.png" width="49%" alt="Provider settings in the cream theme, with a Get a key button on the Gemini card">
-  <img src="docs/media/settings-dark.png" width="49%" alt="Shortcut settings in the dark theme">
+  <img src="docs/media/settings-dark.png" width="90%" alt="Shortcut settings in the dark theme, with the global hotkey and start-with-Windows toggle">
 </p>
 
 <br>
@@ -117,15 +118,31 @@ compositor-only (opacity + transform, no layout thrash), tuned for a smooth
 Ember tries providers in priority order, keeping only the ones you've configured:
 
 ```
-Gemini  →  OpenAI-compatible (OpenRouter)  →  Claude
-primary        default fallback              optional third family
+Gemini  →  OpenAI-compatible (Groq)  →  Claude
+primary       default fallback         optional third family
 ```
 
-Transient errors retry with backoff on the same provider; only on exhaustion does
-it fall to the next family. Auth and truncation fall over immediately (the other
-family has a different key and different limits). Non-transient errors (a bad
-payload, a content-policy refusal) propagate without masking. Every branch of this
-lives in `ember-core` as a pure, network-free, unit-tested function.
+The middle slot is any **OpenAI-compatible** endpoint. Pick the service in Settings
+and Ember sets its models for you:
+
+| Service | Cost | Why you'd pick it |
+|---|---|---|
+| **Groq** (default) | Free, no card | Roughly 14,000 requests a day. A safety net that is actually there when you need it. |
+| **OpenAI** | Paid | Small models cost a fraction of a cent per refine and never wait in a queue. |
+| **OpenRouter** | Free models | One key, many models, but the free ones are capped near 50 requests a day and get busy. |
+
+Anything else that speaks the same protocol works too, including **DeepSeek** and a
+local **Ollama**: paste its base URL and model id.
+
+Transient errors retry with backoff on the same provider, honouring the server's
+`Retry-After` instead of guessing, because retrying inside a cooldown just earns
+another rate limit. If a server asks for longer than we're willing to wait, Ember
+moves to the next family rather than stalling you. A key that is rejected, a model
+that no longer exists, and a truncated answer all fall straight over to the next
+family, which has a different key, a different model, and different limits.
+Non-transient errors (a bad payload, a content-policy refusal) propagate without
+masking. Every branch of this lives in `ember-core` as a pure, network-free,
+unit-tested function.
 
 <br>
 

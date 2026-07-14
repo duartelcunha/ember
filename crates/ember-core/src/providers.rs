@@ -11,12 +11,24 @@ pub const DEFAULT_GEMINI_MODEL: &str = "gemini-2.5-flash";
 /// Modelo Claude de fallback por defeito: o tier barato e rapido (Haiku), comparavel em custo
 /// ao Gemini Flash. NAO o Sonnet (bem mais caro) por defeito; fica como opcao para quem quiser.
 pub const DEFAULT_CLAUDE_MODEL: &str = "claude-haiku-4-5";
-/// Base URL do provider OpenAI-compatible por defeito: OpenRouter. Um so endpoint (com a mesma
-/// forma /chat/completions) da acesso a muitos modelos, incluindo os `:free` com raciocinio.
-pub const DEFAULT_OPENAI_BASE_URL: &str = "https://openrouter.ai/api/v1";
-/// Modelo OpenAI-compatible por defeito: DeepSeek R1 free via OpenRouter (reasoning exposto em
-/// `reasoning_content`). Estes ids `:free` mudam; a UI permite escrever qualquer id (Custom).
-pub const DEFAULT_OPENAI_MODEL: &str = "deepseek/deepseek-r1:free";
+/// Base URL do provider de fallback (OpenAI-compatible) por defeito: **Groq**.
+///
+/// Era o OpenRouter, e isso estava errado. Um fallback existe para estar la quando o primario
+/// cai; o tier gratuito do OpenRouter, sem creditos comprados, da ~50 pedidos POR DIA aos
+/// modelos `:free`, e esses modelos sao servidos por upstreams partilhados que devolvem 429 em
+/// hora de ponta. Ou seja: a rede de seguranca do Ember rompia-se ao primeiro dia de uso a
+/// serio (medido, nao teorico). O free tier do Groq da ~14 000 pedidos por dia, sem cartao de
+/// credito, e serve os modelos ele proprio. Para um fallback, isso e a diferenca entre existir e
+/// nao existir. O OpenRouter continua a um clique de distancia nas Settings.
+pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.groq.com/openai/v1";
+/// Modelo de fallback por defeito: o generalista forte do Groq. Instruct e de prosa de proposito
+/// (o Ember refina TEXTO, nao gera codigo).
+///
+/// Historico util: o default foi `deepseek/deepseek-r1:free`, que o OpenRouter DESCONTINUOU, e
+/// todo o utilizador novo que seguisse o quick start apanhava um erro porque o modelo por
+/// omissao ja nao existia. O `qwen3-coder:free` que se lhe seguiu era um modelo de CODIGO, mau
+/// para prosa e o mais rate-limited de todos.
+pub const DEFAULT_OPENAI_MODEL: &str = "llama-3.3-70b-versatile";
 
 // ---------------------------------------------------------------------------------------
 // Gemini
@@ -242,6 +254,48 @@ pub fn openai_models_url(base_url: &str) -> String {
 /// e o thinking esta ligado (o unico caso em que sabemos que o campo e aceite). `max_tokens` e
 /// universalmente aceite pela familia OpenAI-compatible que visamos (nao `max_completion_tokens`,
 /// rename so do OpenAI o-series direto).
+/// Modelos gratuitos alternativos, para o failover automatico do OpenRouter (ver
+/// `openai_fallback_models`). Ordem = preferencia. Servidos por upstreams DIFERENTES de
+/// proposito: e essa diversidade que faz o failover valer alguma coisa (todos no mesmo upstream
+/// cairiam ao mesmo tempo, que foi exatamente o que aconteceu com a Venice a servir o
+/// `qwen3-coder:free` e o `llama-3.3:free`).
+pub const OPENROUTER_FREE_MODELS: [&str; 3] = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-4-31b-it:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+];
+
+/// Lista para o campo `models` do OpenRouter: o modelo escolhido primeiro, seguido dos outros
+/// gratuitos como rede. O OpenRouter tenta-os por ordem e serve o primeiro que estiver livre,
+/// e o failover dispara exatamente no nosso caso (rate-limit e downtime do upstream). Custa
+/// zero: paga-se (ou nao, sendo gratuitos) so o modelo que acabou por responder.
+///
+/// Porque isto existe: os modelos `:free` sao servidos por parceiros com capacidade partilhada
+/// por toda a gente. Um `llama:free` sozinho devolvia 429 em horas de ponta e a cadeia toda do
+/// Ember morria, mesmo com a chave e a conta perfeitas. Com a lista, o OpenRouter escolhe outro
+/// modelo livre sem sequer nos devolver o erro.
+///
+/// So se aplica ao OpenRouter: um endpoint OpenAI-compatible qualquer (DeepSeek, Groq, Ollama)
+/// nao conhece o campo `models` e podia rejeitar o pedido.
+pub fn openai_fallback_models(chosen: &str, base_url: &str) -> Option<Vec<String>> {
+    if !openai_is_openrouter(base_url) {
+        return None;
+    }
+    // So faz sentido dar rede a um modelo GRATUITO: quem escolheu um modelo pago (ou um custom)
+    // pediu aquele modelo, e nao queremos gastar-lhe dinheiro noutro nem trocar-lhe a qualidade
+    // pelas costas.
+    if !chosen.ends_with(":free") {
+        return None;
+    }
+    let mut out = vec![chosen.to_string()];
+    for m in OPENROUTER_FREE_MODELS {
+        if m != chosen {
+            out.push(m.to_string());
+        }
+    }
+    Some(out)
+}
+
 pub fn openai_request_body(req: &LlmRequest, stream: bool, base_url: &str) -> Value {
     let mut body = json!({
         "model": req.model,
@@ -253,6 +307,12 @@ pub fn openai_request_body(req: &LlmRequest, stream: bool, base_url: &str) -> Va
         "temperature": req.temperature,
         "stream": stream
     });
+    // Failover de modelo DENTRO do OpenRouter, antes de a cadeia do Ember desistir desta familia.
+    if let Some(models) = openai_fallback_models(&req.model, base_url) {
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("models".into(), json!(models));
+        }
+    }
     if req.thinking && openai_is_openrouter(base_url) {
         // Spelling atual do OpenRouter: `reasoning: { include: true }`. O legacy
         // `include_reasoning: true` ainda funciona mas esta descontinuado.
@@ -381,6 +441,10 @@ pub fn parse_sse_data_lines(event_block: &str) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Base URL do OpenRouter, explicita: o DEFAULT_OPENAI_BASE_URL passou a ser o Groq, e
+    /// os campos `models`/`reasoning` so vao para o OpenRouter.
+    const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 
     fn req() -> LlmRequest {
         LlmRequest {
@@ -687,7 +751,7 @@ mod tests {
 
     #[test]
     fn openai_body_shape_system_then_user_and_stream_flag() {
-        let b = openai_request_body(&req(), true, DEFAULT_OPENAI_BASE_URL);
+        let b = openai_request_body(&req(), true, OPENROUTER);
         assert_eq!(b.pointer("/messages/0/role").unwrap(), "system");
         assert_eq!(b.pointer("/messages/0/content").unwrap(), "sys");
         assert_eq!(b.pointer("/messages/1/role").unwrap(), "user");
@@ -697,9 +761,55 @@ mod tests {
     }
 
     #[test]
+    fn openrouter_free_model_gets_the_other_free_models_as_fallbacks() {
+        // Regressao real: os `:free` sao servidos por upstreams partilhados (a Venice servia o
+        // qwen3-coder E o llama-3.3). Um so modelo dava 429 em hora de ponta e a familia toda
+        // morria, com a chave e a conta perfeitas. O campo `models` poe o OpenRouter a escolher
+        // outro modelo livre sem sequer nos devolver o erro.
+        let mut r = req();
+        r.model = "meta-llama/llama-3.3-70b-instruct:free".into();
+        let b = openai_request_body(&r, true, OPENROUTER);
+        let models: Vec<&str> = b
+            .get("models")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m.as_str().unwrap())
+            .collect();
+        // O escolhido vem primeiro, sem duplicados, com os outros gratuitos por tras.
+        assert_eq!(models[0], "meta-llama/llama-3.3-70b-instruct:free");
+        assert!(models.len() >= 2);
+        assert_eq!(
+            models.iter().filter(|m| **m == models[0]).count(),
+            1,
+            "o modelo escolhido nao pode aparecer duas vezes"
+        );
+        // O campo `model` continua la (o OpenRouter usa-o como primario).
+        assert_eq!(b.get("model").unwrap(), "meta-llama/llama-3.3-70b-instruct:free");
+    }
+
+    #[test]
+    fn no_model_fallbacks_for_paid_models_or_other_endpoints() {
+        // Modelo PAGO: quem o escolheu quer aquele. Nao lhe trocamos a qualidade nem lhe
+        // gastamos dinheiro noutro modelo pelas costas.
+        let mut paid = req();
+        paid.model = "anthropic/claude-haiku-4.5".into();
+        let b = openai_request_body(&paid, true, OPENROUTER);
+        assert!(b.get("models").is_none());
+
+        // Endpoint que NAO e OpenRouter (DeepSeek, Groq, Ollama): nao conhece o campo `models` e
+        // podia rejeitar o pedido inteiro.
+        let mut free = req();
+        free.model = "meta-llama/llama-3.3-70b-instruct:free".into();
+        let b2 = openai_request_body(&free, true, "https://api.deepseek.com/v1");
+        assert!(b2.get("models").is_none());
+    }
+
+    #[test]
     fn openai_body_adds_reasoning_only_for_openrouter_when_thinking() {
         // OpenRouter + thinking on -> reasoning presente.
-        let b = openai_request_body(&req(), true, DEFAULT_OPENAI_BASE_URL);
+        let b = openai_request_body(&req(), true, OPENROUTER);
         assert_eq!(b.pointer("/reasoning/include").unwrap(), true);
 
         // Outro base URL (ex: DeepSeek direto) -> sem reasoning, mesmo com thinking on.
@@ -709,7 +819,7 @@ mod tests {
         // OpenRouter mas thinking off -> sem reasoning.
         let mut r = req();
         r.thinking = false;
-        let b3 = openai_request_body(&r, true, DEFAULT_OPENAI_BASE_URL);
+        let b3 = openai_request_body(&r, true, OPENROUTER);
         assert!(b3.get("reasoning").is_none());
     }
 

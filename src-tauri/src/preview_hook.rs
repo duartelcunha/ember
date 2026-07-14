@@ -54,6 +54,10 @@ mod imp {
     // Ignorar teclas ja fisicamente premidas quando o hook instala (ex.: o Enter que disparou o
     // proprio refine). So contam apos uma transicao up->down fresca. Bit por tecla: 1=Enter,2=Esc.
     static IGNORE_HELD: AtomicU8 = AtomicU8::new(0);
+    // Teclas cujo key-UP o hook ja viu nesta sessao de gate. Bits iguais aos de IGNORE_HELD.
+    // O gate decide no key-DOWN, mas so LARGA o hook depois de ver a tecla subir: ver
+    // `drain_until_released`.
+    static RELEASED: AtomicU8 = AtomicU8::new(0);
 
     const IGN_ENTER: u8 = 1;
     const IGN_ESC: u8 = 2;
@@ -81,6 +85,7 @@ mod imp {
                 let ignoring = IGNORE_HELD.load(Ordering::SeqCst) & bit != 0;
                 if is_up {
                     IGNORE_HELD.fetch_and(!bit, Ordering::SeqCst);
+                    RELEASED.fetch_or(bit, Ordering::SeqCst);
                     return LRESULT(1); // consome o key-up de Enter/Esc para nao deixar cauda
                 }
                 if is_down {
@@ -99,6 +104,41 @@ mod imp {
         CallNextHookEx(None, code, wparam, lparam)
     }
 
+    /// Teto da espera pelo key-up da tecla da decisao. Uma tecla presa (ou um key-up que o hook
+    /// nunca chega a ver) nunca pode pendurar o refine: ao fim disto seguimos na mesma.
+    const RELEASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+    /// Bombeia mensagens, com o hook AINDA INSTALADO, ate a tecla `bit` subir de verdade.
+    ///
+    /// Sem isto o gate devolvia `Accept` no key-DOWN do Enter e o hook caia logo a seguir: o
+    /// resto daquela pressao (o key-up e, se o dedo demorasse uns milissegundos, as REPETICOES
+    /// automaticas do Windows) chegava a app em foco sem ninguem a consumir. Num terminal isso
+    /// era um Enter novo: o Claude Code submetia o prompt sozinho, antes de o utilizador sequer
+    /// ver o texto colado. Enquanto o hook vive, o `ll_proc` engole tudo isso.
+    ///
+    /// Nao usa `GetAsyncKeyState`: o stream de eventos do proprio hook e a fonte da verdade (o
+    /// GetAsyncKeyState ja provou mentir nesta app quando ha um hotkey global registado).
+    fn drain_until_released(bit: u8) {
+        let start = std::time::Instant::now();
+        while RELEASED.load(Ordering::SeqCst) & bit == 0 {
+            let mut msg = MSG::default();
+            while unsafe { PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE) }.as_bool() {
+                unsafe {
+                    let _ = TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+            if start.elapsed() >= RELEASE_TIMEOUT {
+                log::warn!("gate: key-up never seen (bit={bit}); proceeding after timeout");
+                return;
+            }
+            unsafe {
+                MsgWaitForMultipleObjectsEx(None, 10, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            }
+        }
+        log::info!("gate: key released after {:?}", start.elapsed());
+    }
+
     /// RAII: garante `UnhookWindowsHookEx` em todos os caminhos de saida (decisao, cancel,
     /// timeout, panic).
     struct HookGuard(HHOOK);
@@ -114,6 +154,7 @@ mod imp {
     /// thread que instala E bombeia mensagens). Bloqueante: chamar fora do runtime tokio.
     pub fn run_gate_blocking(should_cancel: impl Fn() -> bool) -> Decision {
         HOOK_DECISION.store(0, Ordering::SeqCst);
+        RELEASED.store(0, Ordering::SeqCst);
         // Marca as teclas ja premidas agora (bit alto do GetAsyncKeyState) para as ignorar ate
         // uma descida fresca. Evita um falso Accept do Enter que ainda estava em baixo.
         let mut held = 0u8;
@@ -127,13 +168,17 @@ mod imp {
         }
         IGNORE_HELD.store(held, Ordering::SeqCst);
 
+        log::info!("gate: starting (held_at_install={held})");
         let hmod = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
         let hook = match unsafe {
             SetWindowsHookExW(WH_KEYBOARD_LL, Some(ll_proc), Some(HINSTANCE(hmod.0)), 0)
         } {
             Ok(h) => h,
             // Nao conseguimos instalar o hook: degrada para colar (nunca perde um refine bom).
-            Err(_) => return Decision::Accept,
+            Err(e) => {
+                log::warn!("gate: HOOK INSTALL FAILED ({e}); pasting without approval");
+                return Decision::Accept;
+            }
         };
         let _guard = HookGuard(hook);
         let start = std::time::Instant::now();
@@ -147,18 +192,31 @@ mod imp {
                     DispatchMessageW(&msg);
                 }
             }
-            // 2) Decisao vinda do callback?
+            // 2) Decisao vinda do callback? Antes de largar o hook, espera o key-up REAL da
+            //    tecla premida: enquanto o dedo estiver em baixo, o hook tem de continuar a
+            //    engolir as repeticoes automaticas, senao vazam para a app (num terminal, um
+            //    Enter vazado submete o prompt sozinho).
             match HOOK_DECISION.load(Ordering::SeqCst) {
-                1 => return Decision::Accept,
-                2 => return Decision::Reject,
+                1 => {
+                    log::info!("gate: ACCEPT (Enter consumed by hook)");
+                    drain_until_released(IGN_ENTER);
+                    return Decision::Accept;
+                }
+                2 => {
+                    log::info!("gate: REJECT (Esc consumed by hook)");
+                    drain_until_released(IGN_ESC);
+                    return Decision::Reject;
+                }
                 _ => {}
             }
             // 3) Cancel externo (hotkey durante o preview) -> recusa.
             if should_cancel() {
+                log::info!("gate: REJECT (cancelled)");
                 return Decision::Reject;
             }
             // 4) Prazo total -> recusa (nunca colar sem aprovacao explicita).
             if start.elapsed() >= PREVIEW_TIMEOUT {
+                log::info!("gate: REJECT (timeout, no key seen)");
                 return Decision::Reject;
             }
             // 5) Espera eficiente: acorda ja no input (Enter/Esc imediato), senao 50ms para

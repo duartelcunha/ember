@@ -85,8 +85,13 @@ pub fn classify(
         }
         // Credencial: nao faz retry cego; dispara fallback (chave diferente no outro).
         401 | 403 => OutcomeClass::Auth,
-        // Bug nosso: propaga sem mascarar.
-        400 | 404 | 413 | 422 => OutcomeClass::Payload,
+        // O MODELO nao existe (descontinuado, ou id mal escrito). Nao e um bug do pedido: o
+        // provider seguinte usa um modelo diferente e nao sabe nada deste, por isso vale a pena
+        // tentar. Regressao real: a Google descontinuou o `gemini-2.5-flash-lite` e o 404, tratado
+        // como Payload, matava a CADEIA INTEIRA sem sequer tocar no fallback.
+        404 => OutcomeClass::ModelNotFound,
+        // Bug nosso no pedido: propaga sem mascarar.
+        400 | 413 | 422 => OutcomeClass::Payload,
         // Resto: 5xx desconhecido -> transitorio; 4xx desconhecido -> payload.
         s if (500..=599).contains(&s) => OutcomeClass::Transient { retry_after_ms },
         _ => OutcomeClass::Payload,
@@ -94,7 +99,16 @@ pub fn classify(
 }
 
 /// Backoff exponencial com jitter. `rng01` e injetado em [0,1) para determinismo nos testes
-/// (sem `rand`, sem `Instant` aqui dentro). Honra o `Retry-After`/`RetryInfo` do servidor.
+/// (sem `rand`, sem `Instant` aqui dentro).
+///
+/// O `Retry-After` do servidor e um PISO, nunca algo a encurtar. Antes fazia-se
+/// `server.min(max_delay)`: com o servidor a pedir 12s e o nosso teto em 8s, esperavamos 8s e
+/// batiamos-lhe DENTRO do cooldown, garantindo outro 429 e queimando as tentativas todas por
+/// nada (visto em producao contra os modelos `:free` do OpenRouter). Um `Retry-After: 0` (que o
+/// Gemini devolve) tambem nao pode virar um retry instantaneo: pisa-se no `base_delay_ms`.
+///
+/// Quem decide NAO esperar um `Retry-After` grande demais e o `plan` (cai para o provider
+/// seguinte); aqui, se chega, honra-se.
 pub fn backoff_ms(
     attempt: u32,
     cfg: &RetryConfig,
@@ -102,7 +116,7 @@ pub fn backoff_ms(
     server_retry_after_ms: Option<u64>,
 ) -> u64 {
     if let Some(server) = server_retry_after_ms {
-        return server.min(cfg.max_delay_ms);
+        return server.max(cfg.base_delay_ms);
     }
     let factor = 1u64.checked_shl(attempt).unwrap_or(u64::MAX);
     let capped = cfg.base_delay_ms.saturating_mul(factor).min(cfg.max_delay_ms);
@@ -143,6 +157,16 @@ pub fn plan(state: &LoopState, outcome: &OutcomeClass, cfg: &RetryConfig, rng01:
                 }
             }
         }
+        // Modelo inexistente: repetir da o mesmo 404, mas a familia seguinte tem outro modelo.
+        OutcomeClass::ModelNotFound => {
+            if has_next_provider {
+                fallback()
+            } else {
+                Decision::Fail {
+                    reason: CoreError::ModelNotFound,
+                }
+            }
+        }
         // Corte por tokens e deterministico no mesmo provider (retry cego devolveria o mesmo
         // corte), mas o outro provider pode ter mais folga: fallback, sem retry.
         OutcomeClass::Truncated => {
@@ -155,6 +179,21 @@ pub fn plan(state: &LoopState, outcome: &OutcomeClass, cfg: &RetryConfig, rng01:
             }
         }
         OutcomeClass::Transient { retry_after_ms } => {
+            // O servidor pede mais tempo do que estamos dispostos a esperar? Nao vale a pena
+            // insistir NESTE provider: o Ember refina no momento, ninguem espera 30s por um
+            // paragrafo. Esperar menos do que o pedido so daria outro rate-limit. Vamos direto
+            // a familia seguinte, que tem chave e limites proprios. Sem outra familia, falha
+            // honestamente em vez de prender o utilizador num sleep longo.
+            let asks_too_long = retry_after_ms.is_some_and(|ra| ra > cfg.max_delay_ms);
+            if asks_too_long {
+                return if has_next_provider {
+                    fallback()
+                } else {
+                    Decision::Fail {
+                        reason: CoreError::AllProvidersFailed,
+                    }
+                };
+            }
             if state.attempt < cfg.max_retries_per_provider {
                 Decision::Retry {
                     delay_ms: backoff_ms(state.attempt, cfg, rng01, *retry_after_ms),
@@ -206,7 +245,9 @@ mod tests {
         assert_eq!(classify(g, 401, None, None), OutcomeClass::Auth);
         assert_eq!(classify(g, 403, None, None), OutcomeClass::Auth);
         assert_eq!(classify(g, 400, None, None), OutcomeClass::Payload);
-        assert_eq!(classify(g, 404, None, None), OutcomeClass::Payload);
+        // 404 e o MODELO que nao existe, nao um payload mau: faz fallback (ver
+        // `a_dead_model_falls_back_instead_of_killing_the_chain`).
+        assert_eq!(classify(g, 404, None, None), OutcomeClass::ModelNotFound);
         assert_eq!(classify(g, 418, None, None), OutcomeClass::Payload);
     }
 
@@ -221,9 +262,79 @@ mod tests {
         assert_eq!(backoff_ms(1, &c, 1.0, None), 1000);
         // cresce mas nunca passa max_delay.
         assert!(backoff_ms(20, &c, 1.0, None) <= c.max_delay_ms);
-        // honra o Retry-After do servidor (capado ao max).
+        // honra o Retry-After do servidor exatamente.
         assert_eq!(backoff_ms(0, &c, 1.0, Some(2000)), 2000);
-        assert_eq!(backoff_ms(0, &c, 1.0, Some(999_999)), c.max_delay_ms);
+    }
+
+    #[test]
+    fn a_dead_model_falls_back_instead_of_killing_the_chain() {
+        // Regressao real: a Google descontinuou o `gemini-2.5-flash-lite` e devolvia 404. Como
+        // 404 era Payload ("bug nosso, propaga"), a cadeia MORRIA no primario e o fallback nunca
+        // era tentado, apesar de usar um modelo completamente diferente. Um modelo morto num
+        // provider nao diz nada sobre o modelo do outro.
+        assert_eq!(
+            classify(Provider::Gemini, 404, None, None),
+            OutcomeClass::ModelNotFound
+        );
+        let c = cfg();
+        let s = LoopState::start();
+        assert_eq!(
+            plan(&s, &OutcomeClass::ModelNotFound, &c, 0.0),
+            Decision::Fallback {
+                next: LoopState { provider_index: 1, attempt: 0 }
+            }
+        );
+        // Sem familia seguinte, falha com uma razao QUE SE PERCEBE (nao um "payload invalido"
+        // que mandava o utilizador procurar um bug que nao existe).
+        let last = LoopState { provider_index: 1, attempt: 0 };
+        assert_eq!(
+            plan(&last, &OutcomeClass::ModelNotFound, &cfg2(), 0.0),
+            Decision::Fail { reason: CoreError::ModelNotFound }
+        );
+        // Um 400 continua a ser Payload: aí o bug e mesmo nosso e propaga sem mascarar.
+        assert_eq!(
+            classify(Provider::Gemini, 400, None, None),
+            OutcomeClass::Payload
+        );
+    }
+
+    #[test]
+    fn server_retry_after_is_a_floor_never_shortened() {
+        // Regressao real (OpenRouter `:free`): o servidor pedia 12s, o `min(max_delay)` encurtava
+        // para 8s e o Ember batia-lhe DENTRO do cooldown, garantindo outro 429. O pedido do
+        // servidor manda; encurta-lo nunca e uma opcao.
+        let c = cfg();
+        assert_eq!(backoff_ms(0, &c, 1.0, Some(12_000)), 12_000);
+        assert!(backoff_ms(0, &c, 1.0, Some(12_000)) > c.max_delay_ms);
+        // Um Retry-After: 0 (o Gemini devolve isto) nao pode virar um hammer instantaneo:
+        // pisa-se no base_delay.
+        assert_eq!(backoff_ms(0, &c, 0.0, Some(0)), c.base_delay_ms);
+    }
+
+    #[test]
+    fn transient_asking_longer_than_max_delay_falls_back_instead_of_waiting() {
+        // O Ember refina no momento: ninguem espera 29s por um paragrafo. Se o servidor pede
+        // mais do que o nosso teto, saltamos ja para a familia seguinte (chave e limites
+        // proprios) em vez de dormir ou de re-tentar cedo demais.
+        let c = cfg();
+        let s = LoopState::start();
+        let out = OutcomeClass::Transient {
+            retry_after_ms: Some(29_000),
+        };
+        assert_eq!(
+            plan(&s, &out, &c, 0.0),
+            Decision::Fallback {
+                next: LoopState { provider_index: 1, attempt: 0 }
+            }
+        );
+        // Sem outra familia, falha honestamente em vez de prender o utilizador num sleep longo.
+        let last = LoopState { provider_index: 1, attempt: 0 };
+        assert_eq!(
+            plan(&last, &out, &cfg2(), 0.0),
+            Decision::Fail {
+                reason: CoreError::AllProvidersFailed
+            }
+        );
     }
 
     #[test]

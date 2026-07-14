@@ -4,9 +4,11 @@ import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import {
   ArrowSquareOut,
+  Atom,
   GearSix,
   GithubLogo,
   Keyboard,
+  Lightning,
   Plugs,
   Sliders,
   Sparkle,
@@ -19,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BrandIcon, type Brand } from "@/components/BrandIcon";
+import { BrandIcon } from "@/components/BrandIcon";
 import { Logo } from "@/components/Logo";
 import { TitleBar } from "@/components/TitleBar";
 import { HotkeyCapture } from "./HotkeyCapture";
@@ -29,16 +31,76 @@ import {
   ipc,
   type EmberSettings,
   type ProviderHealth,
+  type KeyConsole,
   type ProviderKind,
   type RefineMode,
   type Theme,
   type ThinkingLevel,
 } from "@/lib/ipc";
 
-const GEMINI_PRESETS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+// O `gemini-2.5-flash-lite` saiu daqui: a Google fechou-o a contas NOVAS ("no longer available to
+// new users"), portanto qualquer utilizador novo que o escolhesse levava um 404. Continua a
+// funcionar para quem ja o usava, por isso nao o migramos a forca; so deixamos de o oferecer.
+//
+// A quota gratuita do Gemini e POR MODELO (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`),
+// por isso trocar de modelo aqui da uma quota diaria nova. E a saida gratuita quando um deles
+// esgota.
+const GEMINI_PRESETS = ["gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.5-flash"];
 const CLAUDE_PRESETS = ["claude-haiku-4-5", "claude-sonnet-4-6"];
-const OPENAI_PRESETS = ["deepseek/deepseek-r1:free", "qwen/qwen3-coder:free"];
 const CUSTOM = "__custom__";
+
+/**
+ * Endpoints OpenAI-compatible conhecidos, para o provider de fallback. O utilizador escolhe um
+ * (ou escreve a sua Base URL) e leva os modelos certos: um preset de modelos so faz sentido
+ * COLADO ao endpoint que os serve (mandar um id do OpenRouter para o Groq da 404).
+ *
+ * O Groq esta primeiro por um motivo medido, nao por gosto: o tier gratuito do OpenRouter, sem
+ * creditos comprados, da ~50 pedidos POR DIA aos modelos `:free`, e um utilizador que use o
+ * Ember a serio queima isso numa tarde (aconteceu-nos em testes). O free tier do Groq da 14 400
+ * pedidos por dia, sem cartao de credito. Para um fallback que tem de estar la quando o primario
+ * cai, 288x mais folga nao e um detalhe.
+ */
+const OPENAI_ENDPOINTS = [
+  {
+    id: "groq",
+    label: "Groq (free, best limits)",
+    baseUrl: "https://api.groq.com/openai/v1",
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b"],
+    note: "Free, no credit card, and about 14,000 requests a day. The most dependable free fallback.",
+  },
+  {
+    id: "openai",
+    label: "OpenAI (paid, no practical limits)",
+    baseUrl: "https://api.openai.com/v1",
+    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5-nano"],
+    note: "Paid, but these small models cost a fraction of a cent per refine and never queue.",
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter (free models, low daily cap)",
+    baseUrl: "https://openrouter.ai/api/v1",
+    models: [
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "google/gemma-4-31b-it:free",
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+    ],
+    note: "One key, many models. The free models are capped at roughly 50 requests a day, and they are shared with everyone, so they get busy. Topping up $10 of credit raises the cap about twentyfold and is not spent on free models.",
+  },
+] as const;
+
+type EndpointId = (typeof OPENAI_ENDPOINTS)[number]["id"];
+
+/** Que endpoint conhecido corresponde a esta Base URL? `undefined` = custom (DeepSeek, Ollama...). */
+function endpointFor(baseUrl: string | undefined) {
+  if (!baseUrl) return undefined;
+  let host: string;
+  try {
+    host = new URL(baseUrl).host;
+  } catch {
+    return undefined;
+  }
+  return OPENAI_ENDPOINTS.find((e) => new URL(e.baseUrl).host === host);
+}
 
 /** Aplica o tema no <html> via data-theme. O CSS (globals.css) faz o resto: dark e o default
  *  (sem atributo ou "dark"); "cream" liga o bloco :root[data-theme="cream"]. */
@@ -75,42 +137,44 @@ function Section({
   );
 }
 
-/** Consola de chaves por provider (URL no Rust, `open_key_console`; aqui so brand e nome). */
-const KEY_CONSOLES: Record<ProviderKind, { brand: Brand; label: string }> = {
-  gemini: { brand: "gemini", label: "Google AI Studio" },
-  openai: { brand: "openrouter", label: "OpenRouter" },
-  claude: { brand: "claude", label: "Anthropic Console" },
+/**
+ * Consolas de chave: nome legivel + marca. Os URLs vivem no Rust (`open_key_console`).
+ *
+ * O Groq e a OpenAI nao tem logo oficial disponivel (o `simple-icons`, de onde vem os outros,
+ * nao os inclui: o da OpenAI foi retirado a pedido deles, por marca registada). Em vez de
+ * desenhar uma imitacao imprecisa, levam uma marca neutra na cor da casa: um raio para o Groq
+ * (inferencia rapida e a identidade deles) e um atomo para a OpenAI.
+ */
+const KEY_CONSOLES: Record<KeyConsole, { label: string; icon: React.ReactNode }> = {
+  gemini: { label: "Google AI Studio", icon: <BrandIcon brand="gemini" size={14} /> },
+  groq: {
+    label: "Groq Console",
+    icon: <Lightning size={14} weight="fill" color="#F55036" aria-hidden="true" />,
+  },
+  openai: {
+    label: "OpenAI Platform",
+    icon: <Atom size={14} weight="fill" color="#10A37F" aria-hidden="true" />,
+  },
+  openrouter: { label: "OpenRouter", icon: <BrandIcon brand="openrouter" size={14} /> },
+  claude: { label: "Anthropic Console", icon: <BrandIcon brand="claude" size={14} /> },
 };
 
-/** A base URL aponta ao OpenRouter? Decide se o botao "Get a key" do provider OpenAI-compatible
- *  aparece: com a base URL apontada a DeepSeek/Groq/Ollama, o botao levaria o utilizador a criar
- *  uma chave do OpenRouter que falharia contra esse endpoint, pior que nao ter botao. */
-function isOpenRouterUrl(u: string | undefined): boolean {
-  if (!u) return false;
-  try {
-    const host = new URL(u).host;
-    return host === "openrouter.ai" || host.endsWith(".openrouter.ai");
-  } catch {
-    return false;
-  }
-}
-
-/** Botao que abre, no browser, a consola onde se cria a chave deste provider. Poupa ao
- *  utilizador ter de descobrir onde e (a queixa mais comum de qualquer app BYOK). */
-function GetKeyButton({ kind }: { kind: ProviderKind }) {
-  const { brand, label } = KEY_CONSOLES[kind];
+/** Botao que abre, no browser, a consola onde se cria a chave. Poupa ao utilizador ter de
+ *  descobrir onde e (a queixa mais comum de qualquer app BYOK). */
+function GetKeyButton({ console: target }: { console: KeyConsole }) {
+  const { label, icon } = KEY_CONSOLES[target];
   return (
     <Button
       variant="ghost"
       size="sm"
       className="gap-1.5 text-xs"
       onClick={() =>
-        ipc.openKeyConsole(kind).catch(() => toast.error("Couldn't open your browser."))
+        ipc.openKeyConsole(target).catch(() => toast.error("Couldn't open your browser."))
       }
       title={`Opens ${label} in your browser`}
       aria-label={`Get an API key on ${label} (opens in your browser)`}
     >
-      <BrandIcon brand={brand} size={14} />
+      {icon}
       Get a key
       <ArrowSquareOut size={12} className="text-fg-muted" aria-hidden="true" />
     </Button>
@@ -257,16 +321,54 @@ function ProviderConfig({
     }
   };
 
-  // O botao "Get a key" do provider OpenAI-compatible so aparece com o OpenRouter como base
-  // URL: apontada a outro servico, o botao levaria a criar a chave errada.
-  const showKeyConsole = kind !== "openai" || isOpenRouterUrl(baseUrl);
+  // Trocar de servico e uma so accao para o utilizador, mas duas para o sistema: a Base URL e o
+  // MODELO tem de mudar juntos. Um id do OpenRouter mandado ao Groq da 404; deixar o modelo do
+  // servico antigo era garantir um erro no proximo refine.
+  const endpoint = endpointFor(baseUrl);
+  const switchEndpoint = async (id: EndpointId) => {
+    const next = OPENAI_ENDPOINTS.find((e) => e.id === id);
+    if (!next || !onCommitBaseUrl) return;
+    try {
+      await onCommitBaseUrl(next.baseUrl);
+      await ipc.setModel("openai", next.models[0]);
+      toast.success(`Fallback set to ${next.label.split(" (")[0]}.`);
+      onKeyChanged?.(); // refaz a saude: a chave guardada e de OUTRO servico
+    } catch {
+      toast.error("Couldn't switch the service.");
+    }
+  };
+
+  // A consola de chave do fallback depende do SERVICO escolhido, nao do provider: uma chave do
+  // OpenRouter nao serve o Groq. Num endpoint custom (DeepSeek, Ollama) nao ha botao: nao
+  // sabemos onde e, e mandar o utilizador ao sitio errado e pior do que nao o mandar a lado nenhum.
+  const keyConsole: KeyConsole | undefined =
+    kind === "openai" ? endpoint?.id : (kind as KeyConsole);
 
   return (
     <Section
       title={title}
       hint={subtitle}
-      action={showKeyConsole ? <GetKeyButton kind={kind} /> : undefined}
+      action={keyConsole ? <GetKeyButton console={keyConsole} /> : undefined}
     >
+      {kind === "openai" && onCommitBaseUrl && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="openai-endpoint">Service</Label>
+          <Select value={endpoint?.id ?? CUSTOM} onValueChange={(v) => switchEndpoint(v as EndpointId)}>
+            <SelectTrigger id="openai-endpoint">
+              <SelectValue placeholder="Custom endpoint" />
+            </SelectTrigger>
+            <SelectContent>
+              {OPENAI_ENDPOINTS.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.label}
+                </SelectItem>
+              ))}
+              {!endpoint && <SelectItem value={CUSTOM}>Custom (set the Base URL below)</SelectItem>}
+            </SelectContent>
+          </Select>
+          {endpoint && <p className="text-xs text-fg-muted">{endpoint.note}</p>}
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${kind}-key`}>API key</Label>
         <div className="flex gap-2">
@@ -648,15 +750,21 @@ export function Settings() {
                   onDismiss={() => setHealthDismissed(true)}
                 />
                 <p className="text-xs text-fg-muted">
-                  BYOK: bring your own keys. Gemini is primary; an OpenAI-compatible provider
-                  (OpenRouter by default, with free reasoning models) is the fallback; Claude is
-                  an optional third family. Different families fail for different reasons. Keys
-                  live in the OS credential vault, never in plain text.
+                  Bring your own keys. <strong className="text-fg">One key is enough to start</strong>{" "}
+                  (Gemini is the fastest to set up and free). Ember tries them top to bottom, so a
+                  second key is a backup for when the first is down or rate-limited. Keys live in
+                  your OS credential vault, never in plain text.
+                </p>
+                <p className="text-xs text-fg-muted">
+                  <strong className="text-fg">Hitting rate limits?</strong> Free tiers have daily
+                  caps, and free models are shared with everyone, so they get busy at peak times.
+                  That is normal, not a broken key. Either wait, or add a paid key (Claude Haiku
+                  costs cents) as a third family that never queues.
                 </p>
                 <ProviderConfig
                   kind="gemini"
                   title="Gemini (primary)"
-                  subtitle="Fast, with a generous free tier."
+                  subtitle="Start here: free, fast, and the key takes a minute to create. The free tier has a daily cap that resets each day."
                   hasKey={s.hasGeminiKey}
                   model={s.geminiModel}
                   presets={GEMINI_PRESETS}
@@ -664,11 +772,12 @@ export function Settings() {
                 />
                 <ProviderConfig
                   kind="openai"
-                  title="OpenAI-compatible (default fallback)"
-                  subtitle="OpenRouter by default. One key unlocks many models, including free reasoning ones (DeepSeek R1, Qwen3). Point the base URL at DeepSeek, Groq, or local Ollama if you prefer."
+                  title="Fallback (Groq, OpenAI, OpenRouter…)"
+                  subtitle="Used whenever Gemini fails or runs out of quota. Pick a service below and Ember sets the right models for it. Any OpenAI-compatible endpoint works, so you can also point it at DeepSeek or a local Ollama."
                   hasKey={s.hasOpenAiKey}
                   model={s.openaiModel}
-                  presets={OPENAI_PRESETS}
+                  // Os modelos vivem COLADOS ao servico: um id do OpenRouter no Groq da 404.
+                  presets={[...(endpointFor(s.openaiBaseUrl)?.models ?? [])]}
                   baseUrl={s.openaiBaseUrl}
                   onKeyChanged={refreshHealth}
                   onCommitBaseUrl={async (url) => {
@@ -683,7 +792,7 @@ export function Settings() {
                 <ProviderConfig
                   kind="claude"
                   title="Claude (optional third family)"
-                  subtitle="Optional. A cheap, fast extra fallback (Haiku). Pick Sonnet for max quality. Tried only after Gemini and the OpenAI-compatible fallback."
+                  subtitle="Paid, but Haiku costs cents and never waits in a free-tier queue. Add this if you refine a lot and keep hitting limits. Tried last, only when the two above fail."
                   hasKey={s.hasClaudeKey}
                   model={s.claudeModel}
                   presets={CLAUDE_PRESETS}
